@@ -1,0 +1,3 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+export async function POST(){const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)return NextResponse.redirect(new URL("/anmelden",process.env.NEXT_PUBLIC_SITE_URL??"http://localhost:3000"),303);const {error}=await supabase.rpc("create_toilet_request");if(error){const url=new URL("/dashboard",process.env.NEXT_PUBLIC_SITE_URL??"http://localhost:3000");url.searchParams.set("anfrage","fehlgeschlagen");return NextResponse.redirect(url,303);}return NextResponse.redirect(new URL("/dashboard?anfrage=gesendet",process.env.NEXT_PUBLIC_SITE_URL??"http://localhost:3000"),303);}

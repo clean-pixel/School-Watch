@@ -1,0 +1,44 @@
+@import "tailwindcss";
+:root { color-scheme: dark; --navy:#081522; --panel:#102334; --panel2:#142c3d; --teal:#42dfcf; --muted:#a9bdc9; --white:#f4fbff; }
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:radial-gradient(ellipse at 75% -20%,#123d4c 0,transparent 42%),var(--navy); color:var(--white); font-family:Arial,Helvetica,sans-serif; }
+a { color:inherit; text-decoration:none; }
+button,input,select { font:inherit; }
+.container { width:min(1120px,calc(100% - 40px)); margin:auto; }
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:24px 0; }
+.brand { font-size:1.15rem; font-weight:800; letter-spacing:-.03em; display:flex; gap:10px; align-items:center; }
+.brand-mark { width:34px;height:34px;border-radius:11px;background:var(--teal);color:#06202a;display:grid;place-items:center;font-weight:900; }
+.navlinks { display:flex;align-items:center;gap:22px;color:var(--muted);font-size:.92rem; }
+.button { display:inline-flex; align-items:center; justify-content:center; border:0;border-radius:12px;padding:12px 18px;font-weight:700;background:var(--teal);color:#08232d;cursor:pointer; }
+.button.secondary { border:1px solid #335064;background:#102334;color:var(--white); }
+.hero { padding:92px 0 84px;display:grid;grid-template-columns:1.2fr .8fr;gap:56px;align-items:center; }
+.eyebrow { color:var(--teal);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;font-weight:800; }
+h1 { font-size:clamp(2.7rem,6vw,5.3rem);line-height:1.02;letter-spacing:-.055em;margin:18px 0; }
+h2 { font-size:clamp(1.7rem,3vw,2.4rem);letter-spacing:-.035em; }
+p { color:var(--muted);line-height:1.7; }
+.hero p { max-width:620px;font-size:1.1rem; }
+.actions { display:flex;gap:12px;flex-wrap:wrap;margin-top:28px; }
+.preview { min-height:340px;padding:26px;border:1px solid #28465a;border-radius:28px;background:linear-gradient(145deg,#173547,#0d1d2b);box-shadow:0 24px 80px #0005; }
+.preview-head { display:flex;justify-content:space-between;color:var(--muted);font-size:.85rem; }
+.clock { font-size:3.3rem;font-weight:750;margin:26px 0 4px; }
+.row { padding:15px 0;border-top:1px solid #284356;display:flex;justify-content:space-between;gap:12px; }
+.dot { width:9px;height:9px;border-radius:50%;background:var(--teal);display:inline-block;margin-right:8px; }
+.section { padding:60px 0; }
+.grid { display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:26px; }
+.card { padding:24px;border:1px solid #213b4d;border-radius:20px;background:#0e2030;box-shadow:0 12px 35px #0002; }
+.card h3 { margin:0 0 10px; }
+footer { border-top:1px solid #203849;padding:28px 0;margin-top:48px;color:var(--muted);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap; }
+.formwrap { width:min(520px,calc(100% - 32px));margin:50px auto;padding:30px;border:1px solid #294658;border-radius:22px;background:#0e2030; }
+.formgrid { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+.field { display:flex;flex-direction:column;gap:7px;margin:12px 0;color:#d9e8ef;font-size:.92rem; }
+.field input,.field select { width:100%;padding:12px;border:1px solid #345365;border-radius:10px;background:#091724;color:white; }
+.full { grid-column:1/-1; }
+.notice { padding:12px 14px;border:1px solid #426273;border-radius:10px;color:#d7e8ee;margin:14px 0; }
+.dash { display:grid;grid-template-columns:240px 1fr;gap:24px;padding:20px 0; }
+.sidebar { padding:22px;border-radius:18px;background:#0e2030;border:1px solid #203c4e; }
+.sidebar a { display:block;padding:11px 8px;color:var(--muted);border-radius:8px; }
+.sidebar a:hover { background:#173346;color:white; }
+.stat { font-size:2rem;font-weight:800;color:var(--teal); }
+@media(max-width:800px){.hero{grid-template-columns:1fr;padding:56px 0}.navlinks{gap:12px;flex-wrap:wrap;justify-content:flex-end}.grid{grid-template-columns:1fr 1fr}.dash{grid-template-columns:1fr}.sidebar{display:flex;overflow:auto;gap:8px}.sidebar a{white-space:nowrap}.formgrid{grid-template-columns:1fr}.full{grid-column:auto}}
+@media(max-width:560px){.container{width:min(100% - 28px,1120px)}.topbar{align-items:flex-start}.navlinks{font-size:.8rem}.navlinks .wide{display:none}.grid{grid-template-columns:1fr}.formwrap{padding:22px 18px}.hero{padding-top:40px}}
