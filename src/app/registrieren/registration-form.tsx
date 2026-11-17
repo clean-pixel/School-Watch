@@ -47,8 +47,8 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
     setBusy(true);
     const form = new FormData(event.currentTarget);
     const password = String(form.get("password") ?? "");
-    if (password.length < 12 || password.length > 128) {
-      setError("Das Passwort muss zwischen 12 und 128 Zeichen lang sein.");
+    if (password.length < 12 || password.length > 72) {
+      setError("Das Passwort muss zwischen 12 und 72 Zeichen lang sein.");
       setBusy(false);
       return;
     }
@@ -90,7 +90,14 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
         },
       });
       if (signupError) {
-        setError("Registrierung fehlgeschlagen. Prüfe deine Angaben, Supabase-Projekt-URL und Datenbankmigrationen.");
+        const signupMessage = signupError.message.toLowerCase();
+        if (signupMessage.includes("already registered") || signupMessage.includes("already been registered")) {
+          setError("Für diese E-Mail-Adresse gibt es bereits ein Konto. Melde dich bitte an oder verwende eine andere E-Mail-Adresse.");
+        } else if (signupMessage.includes("longer than 72")) {
+          setError("Das Passwort darf höchstens 72 Zeichen lang sein. Bitte kürze es und versuche es erneut.");
+        } else {
+          setError(`Registrierung fehlgeschlagen: ${signupError.message}`);
+        }
       } else if (data.session) {
         // A session means Supabase has accepted direct signup without email confirmation.
         router.replace("/dashboard");
@@ -154,8 +161,8 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
           <label className="field">Bundesland<input required name="state" maxLength={120} /></label>
         </>}
         <label className="field">E-Mail-Adresse (Login)<input required name="email" type="email" autoComplete="email" maxLength={254} /></label>
-        <label className="field">Passwort (12–128 Zeichen)<input required name="password" type="password" minLength={12} maxLength={128} autoComplete="new-password" /></label>
-        <label className="field">Passwort bestätigen<input required name="confirmPassword" type="password" minLength={12} maxLength={128} autoComplete="new-password" /></label>
+        <label className="field">Passwort (12–72 Zeichen)<input required name="password" type="password" minLength={12} maxLength={72} autoComplete="new-password" /></label>
+        <label className="field">Passwort bestätigen<input required name="confirmPassword" type="password" minLength={12} maxLength={72} autoComplete="new-password" /></label>
         <button className="button" disabled={busy || (role !== "schule" && schools.length === 0)}>{busy ? "Konto wird erstellt…" : "Registrieren"}</button>
       </form>
       <p>Schon ein Konto? <Link href="/anmelden">Anmelden</Link></p>
