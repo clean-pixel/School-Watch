@@ -1,0 +1,38 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { toiletDecisionSchema } from "@/lib/validation";
+
+export async function POST(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  if (origin && origin !== request.nextUrl.origin) {
+    return NextResponse.json({ error: "Ungültige Anfragequelle." }, { status: 403 });
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Anmeldung erforderlich." }, { status: 401 });
+  }
+
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Ungültige Anfrage." }, { status: 400 });
+  }
+
+  const parsed = toiletDecisionSchema.safeParse(payload);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Ungültige Eingaben." }, { status: 400 });
+  }
+
+  const { error } = await supabase.rpc("decide_toilet_request", {
+    p_request_id: parsed.data.requestId,
+    p_decision: parsed.data.decision,
+  });
+  if (error) {
+    return NextResponse.json({ error: "Die Anfrage konnte nicht bearbeitet werden." }, { status: 403 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
