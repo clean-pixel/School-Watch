@@ -102,13 +102,33 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
         // A session means Supabase has accepted direct signup without email confirmation.
         router.replace("/dashboard");
         router.refresh();
-      } else if (data.user && data.user.identities?.length === 0) {
-        // Supabase returns an empty identities array for an email that is already registered.
-        setError("Für diese E-Mail-Adresse gibt es bereits ein Konto. Melde dich bitte an oder verwende eine andere E-Mail-Adresse.");
       } else if (data.user) {
-        // Never claim the account is signed in when Supabase returned no session.
-        // This is the expected response when email confirmation is still enabled.
-        setConfirmationPending(true);
+        // A repeated signup can return a user object without a session.
+        // First try a normal password sign-in. This does not bypass email confirmation:
+        // Supabase still enforces its own Auth settings and password checks.
+        const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (loginData.session) {
+          router.replace("/dashboard");
+          router.refresh();
+        } else {
+          const loginMessage = loginError?.message.toLowerCase() ?? "";
+          if (loginMessage.includes("email not confirmed")) {
+            setConfirmationPending(true);
+          } else if (
+            data.user.identities?.length === 0 ||
+            loginMessage.includes("invalid login credentials")
+          ) {
+            setError("Für diese E-Mail-Adresse besteht möglicherweise bereits ein Konto oder das Passwort stimmt nicht. Melde dich bitte mit deinem bestehenden Konto an oder nutze die Passwort-zurücksetzen-Funktion.");
+          } else {
+            setError(loginError
+              ? `Anmeldung nach der Registrierung fehlgeschlagen: ${loginError.message}`
+              : "Supabase hat kein Anmelde-Token ausgegeben. Bitte versuche die Anmeldung über dein bestehendes Konto.");
+          }
+        }
       } else {
         setError("Supabase hat kein Konto und keine Sitzung zurückgegeben. Prüfe die Auth-Konfiguration.");
       }
@@ -124,7 +144,7 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
     <h1 style={{ fontSize: "2rem" }}>{confirmationPending ? "E-Mail-Bestätigung erforderlich" : "Konto erstellen"}</h1>
     {confirmationPending ? <>
       <div className="notice" role="status">
-        Supabase hat für dieses Konto keine Anmeldungssitzung erstellt. Die E-Mail-Bestätigung ist im verbundenen Supabase-Projekt offenbar noch aktiv. Wenn du sie bereits ausgeschaltet hast, prüfe, ob `NEXT_PUBLIC_SUPABASE_URL` auf genau dieses Projekt zeigt und starte den Entwicklungsserver neu. Die Bestätigung lässt sich nicht sicher in der Website umgehen.
+        Supabase hat für dieses Konto noch keine Anmeldungssitzung erstellt. Prüfe dein Postfach auf eine Bestätigungs-E-Mail. Falls du dieses Konto bereits früher erstellt hast, gehe über „Zur Anmeldung“ und melde dich mit deinem bestehenden Passwort an.
       </div>
       <p>{role === "schule" ? "Die Schulregistrierung wurde angenommen; angemeldet bist du erst, wenn Supabase eine Sitzung ausstellt." : role === "lehrer" ? "Die Lehrkraft-Freigabe durch die Schule ist zusätzlich erforderlich." : "Das Schülerkonto wird nach erfolgreicher Authentifizierung verfügbar sein."}</p>
       <Link className="button secondary" href="/anmelden">Zur Anmeldung</Link>
