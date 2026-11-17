@@ -2,56 +2,103 @@
 
 import { useState } from "react";
 
-type HomeworkOption = { id: string; subject: string; learning_scope: string | null; description: string; due_at: string };
+type ChatMessage = { role: "user" | "assistant"; content: string };
 
-export function LearningTutor({ homework }: { homework: HomeworkOption[] }) {
-  const [homeworkId, setHomeworkId] = useState("");
-  const [message, setMessage] = useState("");
-  const [attempt, setAttempt] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [sources, setSources] = useState<{title:string;url:string}[]>([]);
-  const [error, setError] = useState("");
+const suggestions = [
+  "Erklär mir Brüche ganz einfach.",
+  "Hilf mir beim Lernen für eine Klassenarbeit.",
+  "Was ist der Unterschied zwischen Klima und Wetter.",
+];
+
+export function LearningTutor() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  async function ask(event: React.FormEvent<HTMLFormElement>) {
+  async function send(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy(true); setError(""); setAnswer(""); setSources([]);
+    const content = input.trim();
+    if (!content || busy) return;
+
+    const conversation: ChatMessage[] = [...messages, { role: "user", content }];
+    setMessages(conversation);
+    setInput("");
+    setError("");
+    setBusy(true);
+
     try {
-      const response = await fetch("/api/learning/tutor", {
+      const response = await fetch("/api/learning/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ homeworkId: homeworkId || undefined, message, attempt }),
+        body: JSON.stringify({ messages: conversation.slice(-12) }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Die Lern-KI konnte nicht antworten.");
-      setAnswer(payload.answer);
-      setSources(payload.citations ?? []);
+      setMessages([...conversation, { role: "assistant", content: String(payload.answer ?? "") }]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unbekannter Fehler.");
-    } finally { setBusy(false); }
+      setMessages(messages);
+      setInput(content);
+      setError(err instanceof Error ? err.message : "Verbindung zur Lern-KI fehlgeschlagen.");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  return <section className="card">
-    <div className="eyebrow">SchulWatch Lern-KI</div>
-    <h2>Gemeinsam verstehen statt Lösungen abschreiben</h2>
-    <p>Die KI orientiert sich an deinen eingetragenen Hausaufgaben und Unterrichtsthemen. Sie gibt Hinweise, prüft deinen Rechenweg und lässt dich den nächsten Schritt selbst machen.</p>
-    <form onSubmit={ask}>
-      <label className="field">Hausaufgabe auswählen
-        <select value={homeworkId} onChange={(event) => setHomeworkId(event.target.value)}>
-          <option value="">Freie Lernfrage</option>
-          {homework.map((item) => <option key={item.id} value={item.id}>{item.subject}{item.learning_scope ? " · " + item.learning_scope : ""}</option>)}
-        </select>
-      </label>
-      <label className="field">Deine Frage
-        <textarea required minLength={2} maxLength={2000} rows={3} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ich verstehe nicht, wie ich diese Aufgabe anfangen soll …" />
-      </label>
-      <label className="field">Was hast du schon versucht? (dein Rechenweg oder deine Antwort)
-        <textarea maxLength={3000} rows={4} value={attempt} onChange={(event) => setAttempt(event.target.value)} placeholder="Schreibe deinen ersten Schritt hier hinein. Du kannst auch erklären, wo du hängen bleibst." />
-      </label>
-      <button className="button" disabled={busy}>{busy ? "Die Lern-KI denkt nach …" : "Hinweis bekommen"}</button>
-    </form>
+  function startNewChat() {
+    if (busy) return;
+    setMessages([]);
+    setInput("");
+    setError("");
+  }
+
+  return <section className="learning-chat card" aria-label="Chat mit der Lern-KI">
+    <div className="learning-chat-header">
+      <div>
+        <div className="eyebrow">SchulWatch Lern-KI</div>
+        <strong>Dein Lern-Chat</strong>
+        <span className="chat-online"><i /> Bereit zum Helfen</span>
+      </div>
+      <button type="button" className="button secondary" onClick={startNewChat} disabled={busy}>Neuer Chat</button>
+    </div>
+
+    <div className="learning-chat-messages" aria-live="polite">
+      {messages.length === 0 ? <div className="chat-welcome">
+        <div className="chat-avatar">S</div>
+        <h2>Hey! Was möchtest du lernen?</h2>
+        <p>Frag mich etwas oder wähle einen Vorschlag aus. Ich erkläre es verständlich und in deinem Tempo.</p>
+        <div className="chat-suggestions">
+          {suggestions.map((suggestion) => <button type="button" className="chat-suggestion" key={suggestion} onClick={() => setInput(suggestion)}>{suggestion} <span>↗</span></button>)}
+        </div>
+      </div> : messages.map((message, index) => <div className={"chat-message " + message.role} key={index}>
+        {message.role === "assistant" && <div className="chat-avatar small">S</div>}
+        <div className="chat-bubble">
+          <div className="chat-speaker">{message.role === "assistant" ? "SchulWatch Lern-KI" : "Du"}</div>
+          <p>{message.content}</p>
+        </div>
+      </div>)}
+      {busy && <div className="chat-message assistant"><div className="chat-avatar small">S</div><div className="chat-bubble"><div className="chat-speaker">SchulWatch Lern-KI</div><p className="chat-typing">Schreibt eine Antwort …</p></div></div>}
+    </div>
+
     {error && <div className="notice" role="alert">{error}</div>}
-    {answer && <article className="notice" role="status"><strong>Dein nächster Lernschritt</strong><p style={{whiteSpace:"pre-wrap"}}>{answer}</p></article>}
-    {sources.length > 0 && <div className="ai-sources"><strong>Quellen zur Erklärung</strong>{sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.title}</a>)}</div>}
+    <form className="chat-composer" onSubmit={send}>
+      <textarea
+        value={input}
+        onChange={(event) => setInput(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            event.currentTarget.form?.requestSubmit();
+          }
+        }}
+        rows={2}
+        maxLength={2500}
+        placeholder="Schreib deine Frage …"
+        aria-label="Deine Nachricht"
+        disabled={busy}
+      />
+      <button className="button chat-send" disabled={busy || !input.trim()} aria-label="Nachricht senden">{busy ? "…" : "Senden ↑"}</button>
+    </form>
+    <p className="chat-disclaimer">Die Antworten können Fehler enthalten. Gib keine Passwörter oder privaten Daten ein. Dein Chat wird hier nicht dauerhaft gespeichert.</p>
   </section>;
 }
