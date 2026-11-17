@@ -25,7 +25,8 @@ export default async function SchoolSetupPage({ searchParams }: { searchParams: 
     saved:"Änderungen gespeichert.",
     "research-saved":"Die bestätigten Klassen- und Fächervorschläge wurden angelegt.",
     invalid:"Bitte prüfe deine Eingaben.",
-    error:"Speichern fehlgeschlagen. Prüfe die Berechtigung und die Verbindung.",
+    permission:"Die Änderung wurde nicht gespeichert: Prüfe, ob dein Konto als freigegebene Schulleitung deiner eigenen Schule angemeldet ist.",
+    error:"Speichern fehlgeschlagen. Bitte lade die Seite neu. Falls der Fehler bleibt, melde ihn über Fehler melden & Punkte.",
   };
 
   return <main className="container">
