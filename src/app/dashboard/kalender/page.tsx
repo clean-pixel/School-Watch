@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createScheduleChange } from "@/app/dashboard/student-actions";
 
-export default async function CalendarPage() {
+export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  const { status } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/anmelden");
@@ -27,6 +28,7 @@ export default async function CalendarPage() {
     ...(homework ?? []).filter((item) => allowed(item.class_id)).map((item) => ({ id: item.id, title: `Hausaufgabe: ${item.subject}`, detail: item.description, at: item.due_at, kind: "Abgabe" })),
   ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   return <main className="container"><header className="topbar"><Link className="brand" href="/dashboard"><span className="brand-mark">S</span> SchulWatch One</Link><Link href="/dashboard">Übersicht</Link></header><div className="eyebrow">Dein Schulkalender</div><h1 style={{ fontSize: "2.5rem" }}>Kalender</h1><p>Tages- und Wochenübersicht deiner anstehenden Termine, Abgaben, Prüfungen und Stundenplanänderungen.</p>
+    {status && <div className="notice" role={status === "saved" ? "status" : "alert"}>{status === "saved" ? "Änderung gespeichert." : status === "invalid" ? "Bitte prüfe deine Eingaben und das Datum." : "Die Änderung konnte nicht gespeichert werden. Prüfe die Berechtigungen und Datenbankverbindung."}</div>}
     {!isStudent && <form className="card" action={createScheduleChange}><h2>Vertretung / Änderung veröffentlichen</h2><label className="field">Klasse<select name="classId" required defaultValue=""><option value="" disabled>Klasse auswählen</option>{classes?.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label className="field">Art<select name="type"><option value="cancelled">Unterricht fällt aus</option><option value="room">Raumänderung</option><option value="teacher">Vertretungslehrkraft</option><option value="rescheduled">Stunde verschoben</option></select></label><label className="field">Titel<input name="title" required maxLength={160}/></label><label className="field">Details<textarea name="details" maxLength={2000}/></label><label className="field">Gilt ab<input name="appliesAt" type="datetime-local" required/></label><button className="button">Änderung veröffentlichen</button></form>}
     {items.length ? items.map((item) => <article className="card calendar-item" key={`${item.kind}-${item.id}`}><span className="eyebrow">{item.kind}</span><h2>{item.title}</h2><p>{new Date(item.at).toLocaleString("de-DE")}</p><p>{item.detail}</p></article>) : <article className="card"><p>Keine anstehenden Kalendereinträge.</p></article>}
   </main>;
