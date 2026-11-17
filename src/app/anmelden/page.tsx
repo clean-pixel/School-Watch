@@ -12,17 +12,19 @@ export default function LoginPage() {
     setError("");
     setBusy(true);
     const data = new FormData(event.currentTarget);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: String(data.get("email")),
-      password: String(data.get("password")),
-    });
-    setBusy(false);
-    if (error) {
-      setError("Anmeldung nicht möglich. Prüfe E-Mail, Passwort und ob du die E-Mail-Bestätigung abgeschlossen hast.");
-      return;
+    try {
+      const supabase = createClient();
+      const { error: loginError } = await supabase.auth.signInWithPassword({ email: String(data.get("email") ?? "").trim(), password: String(data.get("password") ?? "") });
+      if (loginError) {
+        setError("Anmeldung nicht möglich. Prüfe E-Mail, Passwort und eine gegebenenfalls nötige E-Mail-Bestätigung.");
+        setBusy(false);
+        return;
+      }
+      location.assign("/dashboard");
+    } catch {
+      setError("Supabase ist nicht erreichbar oder noch nicht konfiguriert.");
+      setBusy(false);
     }
-    location.assign("/dashboard");
   }
 
   return <main className="formwrap">
@@ -33,9 +35,10 @@ export default function LoginPage() {
     <form onSubmit={submit}>
       <label className="field">E-Mail-Adresse<input required name="email" type="email" autoComplete="email" /></label>
       <label className="field">Passwort<input required name="password" type="password" autoComplete="current-password" /></label>
+      <label className="field" style={{ flexDirection: "row", alignItems: "center" }}><input name="remember" type="checkbox" defaultChecked /> Angemeldet bleiben</label>
       <button className="button" disabled={busy}>{busy ? "Anmeldung läuft…" : "Anmelden"}</button>
     </form>
-    <p>Noch kein Konto? <Link href="/registrieren?rolle=schueler">Als Schüler/in registrieren</Link> · <Link href="/registrieren?rolle=lehrer">Als Lehrkraft registrieren</Link> · <Link href="/registrieren?rolle=schule">Schule registrieren</Link></p>
+    <p>Noch kein Konto? <Link href="/registrieren?rolle=schule">Schule</Link> · <Link href="/registrieren?rolle=lehrer">Lehrkraft</Link> · <Link href="/registrieren?rolle=schueler">Schüler/in</Link></p>
     <p><Link href="/passwort-vergessen">Passwort vergessen?</Link></p>
   </main>;
 }

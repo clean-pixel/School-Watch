@@ -1,18 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type RegistrationRole = "schueler" | "lehrer" | "schule";
-type SchoolOption = { id: string; name: string; city: string };
+export type RegistrationRole = "schueler" | "lehrer" | "schule";
+export type SchoolOption = { id: string; name: string; city: string };
 
-export function RegistrationForm({ schools, initialRole }: { schools: SchoolOption[]; initialRole: RegistrationRole }) {
+type Props = { schools: SchoolOption[]; initialRole: RegistrationRole; setupError: boolean };
+
+export function RegistrationForm({ schools, initialRole, setupError }: Props) {
   const router = useRouter();
   const [role, setRole] = useState<RegistrationRole>(initialRole);
   const [error, setError] = useState("");
-  const [done, setDone] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -21,8 +23,8 @@ export function RegistrationForm({ schools, initialRole }: { schools: SchoolOpti
     setBusy(true);
     const form = new FormData(event.currentTarget);
     const password = String(form.get("password") ?? "");
-    if (password.length < 12) {
-      setError("Das Passwort muss mindestens 12 Zeichen enthalten.");
+    if (password.length < 12 || password.length > 128) {
+      setError("Das Passwort muss zwischen 12 und 128 Zeichen lang sein.");
       setBusy(false);
       return;
     }
@@ -50,9 +52,7 @@ export function RegistrationForm({ schools, initialRole }: { schools: SchoolOpti
       metadata.postal_code = String(form.get("postalCode") ?? "").trim();
       metadata.city = String(form.get("city") ?? "").trim();
       metadata.state = String(form.get("state") ?? "").trim();
-    } else {
-      metadata.school_id = schoolId;
-    }
+    } else metadata.school_id = schoolId;
 
     try {
       const supabase = createClient();
@@ -65,15 +65,12 @@ export function RegistrationForm({ schools, initialRole }: { schools: SchoolOpti
         },
       });
       if (signupError) {
-        setError("Registrierung fehlgeschlagen. Prüfe deine Angaben und ob die Supabase-Migrationen ausgeführt wurden.");
+        setError("Registrierung fehlgeschlagen. Prüfe deine Angaben und ob die Supabase-Migrationen eingerichtet sind.");
       } else if (data.session) {
-        // When email confirmation is disabled, Supabase has already signed the new user in.
         router.replace("/dashboard");
         router.refresh();
       } else {
-        // With email confirmation enabled the new school/profile is created by the DB trigger;
-        // the confirmation callback takes the user to their school dashboard.
-        setDone(true);
+        setSubmitted(true);
       }
     } catch {
       setError("Verbindung fehlgeschlagen. Bitte prüfe die Supabase-Konfiguration.");
@@ -82,21 +79,22 @@ export function RegistrationForm({ schools, initialRole }: { schools: SchoolOpti
     }
   }
 
-  if (done) return <main className="formwrap">
+  if (submitted) return <main className="formwrap">
     <Link className="brand" href="/"><span className="brand-mark">S</span> SchulWatch One</Link>
-    <h1 style={{ fontSize: "2rem" }}>{role === "schule" ? "Schule erstellt" : "Registrierung eingereicht"}</h1>
-    <p>{role === "schule"
-      ? "Dein Schulkonto ist als Schuladministrator eingerichtet. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach. Danach wirst du direkt zum Schul-Dashboard weitergeleitet."
+    <h1 style={{ fontSize: "2rem" }}>{role === "schule" ? "Schulkonto erstellt" : "Registrierung eingegangen"}</h1>
+    {role === "schule"
+      ? <p>Dein Konto ist als Schulleitung eingerichtet. Bestätige, falls verlangt, deine E-Mail-Adresse. Danach kannst du dich anmelden und direkt den Schulbereich öffnen.</p>
       : role === "lehrer"
-        ? "Dein Zugang wird erst aktiv, wenn die ausgewählte Schule deine Lehrkraft-Anmeldung bestätigt. Bestätige gegebenenfalls auch deine E-Mail-Adresse."
-        : "Dein Schülerkonto wurde erstellt und der ausgewählten Schule zugeordnet. Bestätige gegebenenfalls deine E-Mail-Adresse."}</p>
+        ? <p>Deine ausgewählte Schule muss den Lehrkraft-Zugang erst freigeben. Eine zusätzliche E-Mail-Bestätigung hängt von deinen Supabase-Einstellungen ab.</p>
+        : <p>Dein Schülerkonto wurde der ausgewählten Schule zugeordnet. Bestätige, falls verlangt, deine E-Mail-Adresse.</p>}
     <Link className="button" href="/anmelden">Zur Anmeldung</Link>
   </main>;
 
   return <main className="formwrap">
     <Link className="brand" href="/"><span className="brand-mark">S</span> SchulWatch One</Link>
     <h1 style={{ fontSize: "2rem" }}>Konto erstellen</h1>
-    <p>Schul- und Schülerkonten werden direkt eingerichtet. Lehrkräfte werden von ihrer Schule bestätigt.</p>
+    <p>Schulen und Schüler starten direkt. Lehrkräfte können erst nach Freigabe durch die Schule auf deren Bereich zugreifen.</p>
+    {setupError && <div className="notice" role="alert">Die Schulliste konnte nicht geladen werden. Prüfe, ob die Supabase-Migrationen bis einschließlich 005 ausgeführt wurden.</div>}
     {error && <div className="notice" role="alert">{error}</div>}
     <form onSubmit={submit}>
       <label className="field">Ich registriere mich als
@@ -114,7 +112,7 @@ export function RegistrationForm({ schools, initialRole }: { schools: SchoolOpti
           <option value="" disabled>Schule auswählen</option>
           {schools.map((school) => <option key={school.id} value={school.id}>{school.name} · {school.city}</option>)}
         </select>
-        {schools.length === 0 && <span>Es gibt noch keine verfügbare Schule. Registriere zuerst eine Schule.</span>}
+        {schools.length === 0 && <span>Noch keine Schule verfügbar. Registriere zuerst eine Schule.</span>}
       </label>}
       {role === "schule" && <>
         <label className="field">Schulname<input required name="schoolName" maxLength={160} /></label>
@@ -125,8 +123,8 @@ export function RegistrationForm({ schools, initialRole }: { schools: SchoolOpti
         <label className="field">Bundesland<input required name="state" maxLength={120} /></label>
       </>}
       <label className="field">Dienstliche E-Mail-Adresse<input required name="email" type="email" autoComplete="email" maxLength={254} /></label>
-      <label className="field">Passwort (mindestens 12 Zeichen)<input required name="password" type="password" minLength={12} autoComplete="new-password" /></label>
-      <label className="field">Passwort bestätigen<input required name="confirmPassword" type="password" minLength={12} autoComplete="new-password" /></label>
+      <label className="field">Passwort (12–128 Zeichen)<input required name="password" type="password" minLength={12} maxLength={128} autoComplete="new-password" /></label>
+      <label className="field">Passwort bestätigen<input required name="confirmPassword" type="password" minLength={12} maxLength={128} autoComplete="new-password" /></label>
       <button className="button" disabled={busy || (role !== "schule" && schools.length === 0)}>{busy ? "Konto wird erstellt…" : "Registrieren"}</button>
     </form>
     <p>Schon ein Konto? <Link href="/anmelden">Anmelden</Link></p>
