@@ -19,7 +19,7 @@ export default async function Dashboard() {
     .select("display_name,role,school_id,registration_status")
     .eq("id", user.id)
     .maybeSingle();
-  if (!profile) return <main className="container"><h1>Konto wird eingerichtet</h1><p>Bitte bestätige zuerst deine E-Mail und melde dich danach erneut an.</p></main>;
+  if (!profile) return <main className="container"><header className="topbar"><Link className="brand" href="/"><span className="brand-mark">S</span> SchulWatch One</Link><form action="/auth/signout" method="post"><button className="button secondary">Abmelden</button></form></header><section className="card"><h1 style={{ fontSize: "2.4rem" }}>Profil noch nicht eingerichtet</h1><p>Dein Konto ist angemeldet, aber das SchulWatch-Profil wurde noch nicht angelegt. Melde dich ab und erneut an. Falls die Meldung bleibt, kontaktiere bitte die Schulverwaltung.</p><Link className="button" href="/anmelden">Zur Anmeldung</Link></section></main>;
 
   const { data: school } = profile.school_id
     ? await supabase.from("schools").select("id,name,school_type,city").eq("id", profile.school_id).maybeSingle()
@@ -30,9 +30,14 @@ export default async function Dashboard() {
   }
 
   const schoolAdmin = profile.role === "school_admin";
-  const links = schoolAdmin || profile.role === "teacher"
-    ? [["Übersicht", "/dashboard"], ["Klassen", "/dashboard/classes"], ["Lehrkräfte", "/dashboard/teachers"], ["Stundenplan", "/dashboard/timetable"], ["Vertretungsplan", "/dashboard/substitutions"], ["Hausaufgaben", "/dashboard/homework"], ["Nachrichten", "/dashboard/messages"], ["Schulmeldungen", "/dashboard/announcements"], ["Termine", "/dashboard/events"], ["Geräte", "/dashboard/devices"], ["Einstellungen", "/dashboard/settings"]]
-    : [["Übersicht", "/dashboard"], ["Mein Stundenplan", "/dashboard/timetable"], ["Meine Klassen", "/dashboard/classes"], ["Hausaufgaben", "/dashboard/homework"], ["Nachrichten", "/dashboard/messages"], ["Schulmeldungen", "/dashboard/announcements"], ["Termine", "/dashboard/events"], ["Einstellungen", "/dashboard/settings"]];
+  const platformAdmin = profile.role === "platform_admin";
+  const links: [string, string][] = platformAdmin
+    ? [["Übersicht", "/dashboard"], ["Plattformverwaltung", "/dashboard/platform"], ["Schulanträge", "/admin"], ["Einstellungen", "/dashboard/settings"]]
+    : schoolAdmin
+      ? [["Übersicht", "/dashboard"], ["Klassen", "/dashboard/classes"], ["Lehrkräfte", "/dashboard/teachers"], ["Stundenplan", "/dashboard/timetable"], ["Hausaufgaben", "/dashboard/homework"], ["Nachrichten", "/dashboard/messages"], ["Schulmeldungen", "/dashboard/announcements"], ["Termine", "/dashboard/events"], ["Kalender & Vertretungen", "/dashboard/kalender"], ["Prüfungsplaner", "/dashboard/pruefungsplaner"], ["Geräte", "/dashboard/devices"], ["Toilettenanfragen", "/dashboard/toilet-requests"], ["Einstellungen", "/dashboard/settings"]]
+      : profile.role === "teacher"
+        ? [["Übersicht", "/dashboard"], ["Klassen", "/dashboard/classes"], ["Stundenplan", "/dashboard/timetable"], ["Hausaufgaben", "/dashboard/homework"], ["Nachrichten", "/dashboard/messages"], ["Schulmeldungen", "/dashboard/announcements"], ["Termine", "/dashboard/events"], ["Kalender & Vertretungen", "/dashboard/kalender"], ["Prüfungsplaner", "/dashboard/pruefungsplaner"], ["Toilettenanfragen", "/dashboard/toilet-requests"], ["Einstellungen", "/dashboard/settings"]]
+        : [["Übersicht", "/dashboard"], ["Mein Stundenplan", "/dashboard/timetable"], ["Meine Klassen", "/dashboard/classes"], ["Hausaufgaben", "/dashboard/homework"], ["Nachrichten", "/dashboard/messages"], ["Schulmeldungen", "/dashboard/announcements"], ["Termine", "/dashboard/events"], ["Kalender", "/dashboard/kalender"], ["Prüfungsplaner", "/dashboard/pruefungsplaner"], ["Fokusmodus", "/dashboard/focus"], ["Toilettenanfragen", "/dashboard/toilet-requests"], ["Einstellungen", "/dashboard/settings"]];
 
   const { count: classCount } = profile.school_id
     ? await supabase.from("classes").select("id", { count: "exact", head: true }).eq("school_id", profile.school_id)
