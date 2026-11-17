@@ -8,6 +8,13 @@ import { createClient } from "@/lib/supabase/client";
 export type RegistrationRole = "schueler" | "lehrer" | "schule";
 export type SchoolOption = { id: string; name: string; city: string };
 
+const germanStates = [
+  "Baden-Württemberg", "Bayern", "Berlin", "Brandenburg", "Bremen",
+  "Hamburg", "Hessen", "Mecklenburg-Vorpommern", "Niedersachsen",
+  "Nordrhein-Westfalen", "Rheinland-Pfalz", "Saarland", "Sachsen",
+  "Sachsen-Anhalt", "Schleswig-Holstein", "Thüringen",
+];
+
 type Props = { schools: SchoolOption[]; initialRole: RegistrationRole; setupError: boolean };
 
 export function RegistrationForm({ schools: initialSchools, initialRole, setupError: initialSetupError }: Props) {
@@ -181,7 +188,12 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
           <label className="field">Straße und Hausnummer<input required name="street" maxLength={200} /></label>
           <label className="field">Postleitzahl<input required name="postalCode" maxLength={20} /></label>
           <label className="field">Stadt<input required name="city" maxLength={120} /></label>
-          <label className="field">Bundesland<input required name="state" maxLength={120} /></label>
+          <label className="field">Bundesland
+            <select required name="state" defaultValue="">
+              <option value="" disabled>Bundesland auswählen</option>
+              {germanStates.map((state) => <option key={state} value={state}>{state}</option>)}
+            </select>
+          </label>
         </>}
         <label className="field">E-Mail-Adresse (Login)<input required name="email" type="email" autoComplete="email" maxLength={254} /></label>
         <label className="field">Passwort (12–72 Zeichen)<input required name="password" type="password" minLength={12} maxLength={72} autoComplete="new-password" /></label>
