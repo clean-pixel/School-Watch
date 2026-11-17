@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type RegistrationRole = "schueler" | "lehrer" | "schule";
 type SchoolOption = { id: string; name: string; city: string };
 
-export function RegistrationForm({ schools }: { schools: SchoolOption[] }) {
-  const [role, setRole] = useState<RegistrationRole>("schueler");
+export function RegistrationForm({ schools, initialRole }: { schools: SchoolOption[]; initialRole: RegistrationRole }) {
+  const router = useRouter();
+  const [role, setRole] = useState<RegistrationRole>(initialRole);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -19,12 +21,18 @@ export function RegistrationForm({ schools }: { schools: SchoolOption[] }) {
     setBusy(true);
     const form = new FormData(event.currentTarget);
     const password = String(form.get("password") ?? "");
-    const schoolId = String(form.get("schoolId") ?? "");
     if (password.length < 12) {
       setError("Das Passwort muss mindestens 12 Zeichen enthalten.");
       setBusy(false);
       return;
     }
+    if (password !== String(form.get("confirmPassword") ?? "")) {
+      setError("Die Passwörter stimmen nicht überein.");
+      setBusy(false);
+      return;
+    }
+
+    const schoolId = String(form.get("schoolId") ?? "");
     if (role !== "schule" && !schools.some((school) => school.id === schoolId)) {
       setError("Bitte wähle eine verfügbare Schule aus.");
       setBusy(false);
@@ -42,42 +50,70 @@ export function RegistrationForm({ schools }: { schools: SchoolOption[] }) {
       metadata.postal_code = String(form.get("postalCode") ?? "").trim();
       metadata.city = String(form.get("city") ?? "").trim();
       metadata.state = String(form.get("state") ?? "").trim();
-    } else metadata.school_id = schoolId;
+    } else {
+      metadata.school_id = schoolId;
+    }
 
     try {
       const supabase = createClient();
-      const { error: signupError } = await supabase.auth.signUp({
-        email: String(form.get("email") ?? "").trim(), password,
-        options: { emailRedirectTo: `${location.origin}/auth/callback?next=/dashboard`, data: metadata },
+      const { data, error: signupError } = await supabase.auth.signUp({
+        email: String(form.get("email") ?? "").trim(),
+        password,
+        options: {
+          emailRedirectTo: `${location.origin}/auth/callback?next=/dashboard`,
+          data: metadata,
+        },
       });
-      if (signupError) setError("Registrierung fehlgeschlagen. Prüfe deine Angaben oder versuche es später erneut.");
-      else setDone(true);
+      if (signupError) {
+        setError("Registrierung fehlgeschlagen. Prüfe deine Angaben und ob die Supabase-Migrationen ausgeführt wurden.");
+      } else if (data.session) {
+        // When email confirmation is disabled, Supabase has already signed the new user in.
+        router.replace("/dashboard");
+        router.refresh();
+      } else {
+        // With email confirmation enabled the new school/profile is created by the DB trigger;
+        // the confirmation callback takes the user to their school dashboard.
+        setDone(true);
+      }
     } catch {
       setError("Verbindung fehlgeschlagen. Bitte prüfe die Supabase-Konfiguration.");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (done) return <main className="formwrap">
     <Link className="brand" href="/"><span className="brand-mark">S</span> SchulWatch One</Link>
-    <h1 style={{ fontSize: "2rem" }}>Registrierung eingereicht</h1>
-    <p>{role === "lehrer" ? "Dein Konto wird erst aktiv, wenn die ausgewählte Schule deine Lehrkraft-Anmeldung bestätigt." : "Dein Konto wurde erstellt. Falls Supabase die E-Mail-Bestätigung verlangt, bestätige zuerst den Link in deinem Postfach."}</p>
-    <Link href="/anmelden">Zur Anmeldung</Link>
+    <h1 style={{ fontSize: "2rem" }}>{role === "schule" ? "Schule erstellt" : "Registrierung eingereicht"}</h1>
+    <p>{role === "schule"
+      ? "Dein Schulkonto ist als Schuladministrator eingerichtet. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach. Danach wirst du direkt zum Schul-Dashboard weitergeleitet."
+      : role === "lehrer"
+        ? "Dein Zugang wird erst aktiv, wenn die ausgewählte Schule deine Lehrkraft-Anmeldung bestätigt. Bestätige gegebenenfalls auch deine E-Mail-Adresse."
+        : "Dein Schülerkonto wurde erstellt und der ausgewählten Schule zugeordnet. Bestätige gegebenenfalls deine E-Mail-Adresse."}</p>
+    <Link className="button" href="/anmelden">Zur Anmeldung</Link>
   </main>;
 
   return <main className="formwrap">
     <Link className="brand" href="/"><span className="brand-mark">S</span> SchulWatch One</Link>
     <h1 style={{ fontSize: "2rem" }}>Konto erstellen</h1>
-    <p>Schüler treten der ausgewählten Schule sofort bei. Lehrkräfte werden von der Schule bestätigt. Neue Schulen sind direkt verfügbar.</p>
+    <p>Schul- und Schülerkonten werden direkt eingerichtet. Lehrkräfte werden von ihrer Schule bestätigt.</p>
     {error && <div className="notice" role="alert">{error}</div>}
     <form onSubmit={submit}>
       <label className="field">Ich registriere mich als
         <select value={role} onChange={(event) => setRole(event.target.value as RegistrationRole)}>
-          <option value="schueler">Schüler/in</option><option value="lehrer">Lehrkraft</option><option value="schule">Schule</option>
+          <option value="schueler">Schüler/in</option>
+          <option value="lehrer">Lehrkraft</option>
+          <option value="schule">Schulleitung / Schule</option>
         </select>
       </label>
-      <label className="field">{role === "schule" ? "Name der verantwortlichen Schulleitung" : "Vor- und Nachname"}<input required name="displayName" autoComplete="name" maxLength={120} /></label>
+      <label className="field">{role === "schule" ? "Name der verantwortlichen Schulleitung" : "Vor- und Nachname"}
+        <input required name="displayName" autoComplete="name" maxLength={120} />
+      </label>
       {role !== "schule" && <label className="field">Schule
-        <select name="schoolId" required defaultValue=""><option value="" disabled>Schule auswählen</option>{schools.map((school) => <option key={school.id} value={school.id}>{school.name} · {school.city}</option>)}</select>
+        <select name="schoolId" required defaultValue="">
+          <option value="" disabled>Schule auswählen</option>
+          {schools.map((school) => <option key={school.id} value={school.id}>{school.name} · {school.city}</option>)}
+        </select>
         {schools.length === 0 && <span>Es gibt noch keine verfügbare Schule. Registriere zuerst eine Schule.</span>}
       </label>}
       {role === "schule" && <>
@@ -90,6 +126,7 @@ export function RegistrationForm({ schools }: { schools: SchoolOption[] }) {
       </>}
       <label className="field">Dienstliche E-Mail-Adresse<input required name="email" type="email" autoComplete="email" maxLength={254} /></label>
       <label className="field">Passwort (mindestens 12 Zeichen)<input required name="password" type="password" minLength={12} autoComplete="new-password" /></label>
+      <label className="field">Passwort bestätigen<input required name="confirmPassword" type="password" minLength={12} autoComplete="new-password" /></label>
       <button className="button" disabled={busy || (role !== "schule" && schools.length === 0)}>{busy ? "Konto wird erstellt…" : "Registrieren"}</button>
     </form>
     <p>Schon ein Konto? <Link href="/anmelden">Anmelden</Link></p>
