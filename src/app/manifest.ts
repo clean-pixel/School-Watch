@@ -5,8 +5,8 @@ export default function Manifest() {
     description: "Schule. Einfach. Digital.",
     start_url: "/",
     display: "standalone",
-    background_color: "#081522",
-    theme_color: "#081522",
+    background_color: "#08070e",
+    theme_color: "#08070e",
     lang: "de",
   };
 }

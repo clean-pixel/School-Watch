@@ -3,11 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { z } from "zod";
 
 export async function reviewSchoolRegistration(formData: FormData) {
   const requestId = String(formData.get("requestId") ?? "");
   const decision = String(formData.get("decision") ?? "");
-  if (!requestId || !["approve", "reject"].includes(decision)) {
+  const validRequestId = z.string().uuid().safeParse(requestId);
+  if (!validRequestId.success || !["approve", "reject"].includes(decision)) {
     redirect("/admin?error=invalid");
   }
 
@@ -25,7 +27,7 @@ export async function reviewSchoolRegistration(formData: FormData) {
   const procedure = decision === "approve"
     ? "approve_school_registration"
     : "reject_school_registration";
-  const { error } = await supabase.rpc(procedure, { p_request_id: requestId });
+  const { error } = await supabase.rpc(procedure, { p_request_id: validRequestId.data });
   if (error) redirect("/admin?error=review");
 
   revalidatePath("/admin");

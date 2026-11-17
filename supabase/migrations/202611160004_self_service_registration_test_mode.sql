@@ -51,7 +51,7 @@ begin
   if registration_type = 'school' then
     insert into public.school_registration_requests(
       applicant_id, school_id, school_name, school_type, street, postal_code,
-      city, state, contact_name, email, state, reviewed_at
+      city, region, contact_name, email, state, reviewed_at
     ) values (
       new.id, new_school_id, left(trim(m->>'school_name'), 160),
       left(trim(m->>'school_type'), 100), left(trim(m->>'street'), 200),

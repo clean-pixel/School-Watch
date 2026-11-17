@@ -35,7 +35,6 @@ export default function LoginPage() {
     <form onSubmit={submit}>
       <label className="field">E-Mail-Adresse<input required name="email" type="email" autoComplete="email" /></label>
       <label className="field">Passwort<input required name="password" type="password" autoComplete="current-password" /></label>
-      <label className="field" style={{ flexDirection: "row", alignItems: "center" }}><input name="remember" type="checkbox" defaultChecked /> Angemeldet bleiben</label>
       <button className="button" disabled={busy}>{busy ? "Anmeldung läuft…" : "Anmelden"}</button>
     </form>
     <p>Noch kein Konto? <Link href="/registrieren?rolle=schule">Schule</Link> · <Link href="/registrieren?rolle=lehrer">Lehrkraft</Link> · <Link href="/registrieren?rolle=schueler">Schüler/in</Link></p>
