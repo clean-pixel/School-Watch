@@ -7,6 +7,12 @@ import { z } from "zod";
 const examSchema = z.object({ classId: z.string().uuid(), subject: z.string().trim().min(1).max(100), title: z.string().trim().min(1).max(160), startsAt: z.string().datetime() });
 const scheduleSchema = z.object({ classId: z.string().uuid(), type: z.enum(["cancelled", "room", "teacher", "rescheduled"]), title: z.string().trim().min(1).max(160), details: z.string().trim().max(2000), appliesAt: z.string().datetime() });
 const text = (form: FormData, key: string) => String(form.get(key) ?? "");
+function dateValue(form: FormData, key: string) {
+  const raw = text(form, key);
+  if (!raw) return "";
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
 
 async function getActor(roles: string[]) {
   const supabase = await createClient();
@@ -19,7 +25,7 @@ async function getActor(roles: string[]) {
 
 export async function createExam(form: FormData) {
   const { supabase, user, profile } = await getActor(["teacher", "school_admin"]);
-  const parsed = examSchema.safeParse({ classId: text(form, "classId"), subject: text(form, "subject"), title: text(form, "title"), startsAt: new Date(text(form, "startsAt")).toISOString() });
+  const parsed = examSchema.safeParse({ classId: text(form, "classId"), subject: text(form, "subject"), title: text(form, "title"), startsAt: dateValue(form, "startsAt") });
   if (!parsed.success) redirect("/dashboard/pruefungsplaner?status=invalid");
   const { error } = await supabase.from("exams").insert({ school_id: profile.school_id, class_id: parsed.data.classId, subject: parsed.data.subject, title: parsed.data.title, starts_at: parsed.data.startsAt, created_by: user.id });
   redirect(`/dashboard/pruefungsplaner?status=${error ? "error" : "saved"}`);
@@ -55,10 +61,10 @@ export async function toggleChecklistItem(form: FormData) {
 export async function createScheduleChange(form: FormData) {
   const { supabase, user, profile } = await getActor(["teacher", "school_admin"]);
   const rawTime = text(form, "appliesAt");
-  const parsed = scheduleSchema.safeParse({ classId: text(form, "classId"), type: text(form, "type"), title: text(form, "title"), details: text(form, "details"), appliesAt: new Date(rawTime).toISOString() });
-  if (!parsed.success) redirect("/dashboard/vertretungen?status=invalid");
+  const parsed = scheduleSchema.safeParse({ classId: text(form, "classId"), type: text(form, "type"), title: text(form, "title"), details: text(form, "details"), appliesAt: dateValue(form, "appliesAt") });
+  if (!parsed.success) redirect("/dashboard/kalender?status=invalid");
   const { error } = await supabase.from("schedule_changes").insert({ school_id: profile.school_id, class_id: parsed.data.classId, changed_by: user.id, change_type: parsed.data.type, title: parsed.data.title, details: parsed.data.details, applies_at: parsed.data.appliesAt });
-  redirect(`/dashboard/vertretungen?status=${error ? "error" : "saved"}`);
+  redirect(`/dashboard/kalender?status=${error ? "error" : "saved"}`);
 }
 
 export async function saveDashboardWidgets(form: FormData) {
