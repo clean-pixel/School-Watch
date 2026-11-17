@@ -8,7 +8,7 @@ const classInput = z.object({ name: z.string().trim().min(1).max(80), grade: z.s
 const homeworkInput = z.object({ classId: z.string().uuid(), subject: z.string().trim().min(1).max(100), learningScope: z.string().trim().max(1000).optional(), description: z.string().trim().min(1).max(4000), dueAt: z.string().datetime() });
 const announcementInput = z.object({ title: z.string().trim().min(1).max(160), body: z.string().trim().min(1).max(5000) });
 const eventInput = z.object({ title: z.string().trim().min(1).max(160), description: z.string().trim().max(4000).optional(), startsAt: z.string().datetime() });
-const timetableInput = z.object({ classId: z.string().uuid(), weekday: z.coerce.number().int().min(1).max(7), startsAt: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), endsAt: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), subject: z.string().trim().min(1).max(100), room: z.string().trim().max(80).optional() }).refine((value) => value.endsAt > value.startsAt);
+const timetableInput = z.object({ classId: z.string().uuid(), weekday: z.coerce.number().int().min(1).max(5), startsAt: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), endsAt: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), subject: z.string().trim().min(1).max(100), room: z.string().trim().max(80).optional(), teacherId: z.string().uuid().optional(), weekType: z.enum(["both", "A", "B"]).default("both") }).refine((value) => value.endsAt > value.startsAt);
 const messageInput = z.object({ recipientId: z.string().uuid(), subject: z.string().trim().min(1).max(160), body: z.string().trim().min(1).max(5000) });
 
 async function authorized(roles: string[], requireSchool = true) {
@@ -53,52 +53,73 @@ export async function createEvent(formData: FormData) {
   redirect(`/dashboard/events?status=${error ? "error" : "saved"}`);
 }
 export async function createTimetableEntry(formData: FormData) {
-  const { supabase, profile } = await authorized(["teacher", "school_admin"]);
-  const parsed = timetableInput.safeParse({ classId: value(formData, "classId"), weekday: value(formData, "weekday"), startsAt: value(formData, "startsAt"), endsAt: value(formData, "endsAt"), subject: value(formData, "subject"), room: value(formData, "room"), teacherId: value(formData, "teacherId") || undefined, weekType: value(formData, "weekType") || "both" });
+  const { supabase, profile, user } = await authorized(["teacher", "school_admin"]);
+  const parsed = timetableInput.safeParse({
+    classId: value(formData, "classId"), weekday: value(formData, "weekday"),
+    startsAt: value(formData, "startsAt"), endsAt: value(formData, "endsAt"),
+    subject: value(formData, "subject"), room: value(formData, "room"),
+    teacherId: value(formData, "teacherId") || undefined,
+    weekType: value(formData, "weekType") || "both",
+  });
   if (!parsed.success) redirect("/dashboard/timetable?status=invalid");
-  const { data: existingTimetable, error: lookupError } = await supabase
-    .from("timetables")
-    .select("id")
-    .eq("school_id", profile.school_id)
-    .eq("class_id", parsed.data.classId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+
+  const { data: classRow, error: classError } = await supabase.from("classes")
+    .select("id").eq("id", parsed.data.classId).eq("school_id", profile.school_id).maybeSingle();
+  if (classError || !classRow) redirect("/dashboard/timetable?status=invalid");
+
+  const teacherId = profile.role === "teacher" ? user.id : parsed.data.teacherId;
+  if (!teacherId) redirect("/dashboard/timetable?status=teacher-required");
+  if (profile.role === "teacher" && parsed.data.teacherId && parsed.data.teacherId !== user.id) {
+    redirect("/dashboard/timetable?status=teacher-subject");
+  }
+
+  const { data: teacher, error: teacherError } = await supabase.from("teachers")
+    .select("id,subjects").eq("id", teacherId).eq("school_id", profile.school_id).maybeSingle();
+  if (teacherError || !teacher || !(teacher.subjects ?? []).includes(parsed.data.subject)) {
+    redirect("/dashboard/timetable?status=teacher-subject");
+  }
+
+  if (profile.role === "teacher") {
+    const { data: assignment, error: assignmentError } = await supabase.from("teacher_assignments")
+      .select("id").eq("school_id", profile.school_id).eq("class_id", parsed.data.classId)
+      .eq("teacher_id", user.id).eq("subject", parsed.data.subject).maybeSingle();
+    if (assignmentError || !assignment) redirect("/dashboard/timetable?status=teacher-subject");
+  }
+
+  const { data: existingTimetable, error: lookupError } = await supabase.from("timetables")
+    .select("id").eq("school_id", profile.school_id).eq("class_id", parsed.data.classId)
+    .order("created_at").limit(1).maybeSingle();
   if (lookupError) redirect("/dashboard/timetable?status=error");
 
   let timetableId = existingTimetable?.id;
   if (!timetableId) {
-    const { data: createdTimetable, error: createError } = await supabase
-      .from("timetables")
+    const { data: createdTimetable, error: createError } = await supabase.from("timetables")
       .insert({ school_id: profile.school_id, class_id: parsed.data.classId, name: "Stundenplan" })
-      .select("id")
-      .single();
+      .select("id").single();
     if (createError || !createdTimetable) redirect("/dashboard/timetable?status=error");
     timetableId = createdTimetable.id;
   }
 
-  if (parsed.data.teacherId) {
-    const { data: teacher, error: teacherError } = await supabase
-      .from("teachers")
-      .select("id,subjects")
-      .eq("id", parsed.data.teacherId)
-      .eq("school_id", profile.school_id)
-      .maybeSingle();
-    if (teacherError || !teacher || (teacher.subjects?.length && !teacher.subjects.includes(parsed.data.subject))) {
-      redirect("/dashboard/timetable?status=teacher-subject");
-    }
-  }
+  const [classEntries, teacherEntries] = await Promise.all([
+    supabase.from("timetable_entries").select("id,starts_at,ends_at,week_type")
+      .eq("school_id", profile.school_id).eq("timetable_id", timetableId).eq("weekday", parsed.data.weekday),
+    supabase.from("timetable_entries").select("id,starts_at,ends_at,week_type")
+      .eq("school_id", profile.school_id).eq("teacher_id", teacherId).eq("weekday", parsed.data.weekday),
+  ]);
+  if (classEntries.error || teacherEntries.error) redirect("/dashboard/timetable?status=error");
+
+  const overlaps = (entry: { id: string; starts_at: string; ends_at: string; week_type: string }) => {
+    const weekOverlap = parsed.data.weekType === "both" || entry.week_type === "both" || parsed.data.weekType === entry.week_type;
+    const timeOverlap = parsed.data.startsAt < entry.ends_at.slice(0, 5) && parsed.data.endsAt > entry.starts_at.slice(0, 5);
+    return weekOverlap && timeOverlap;
+  };
+  if ((classEntries.data ?? []).some(overlaps)) redirect("/dashboard/timetable?status=class-conflict");
+  if ((teacherEntries.data ?? []).some(overlaps)) redirect("/dashboard/timetable?status=teacher-conflict");
 
   const { error } = await supabase.from("timetable_entries").insert({
-    school_id: profile.school_id,
-    timetable_id: timetableId,
-    weekday: parsed.data.weekday,
-    starts_at: parsed.data.startsAt,
-    ends_at: parsed.data.endsAt,
-    subject: parsed.data.subject,
-    room: parsed.data.room || null,
-    teacher_id: parsed.data.teacherId || null,
-    week_type: parsed.data.weekType
+    school_id: profile.school_id, timetable_id: timetableId, weekday: parsed.data.weekday,
+    starts_at: parsed.data.startsAt, ends_at: parsed.data.endsAt, subject: parsed.data.subject,
+    room: parsed.data.room || null, teacher_id: teacherId, week_type: parsed.data.weekType,
   });
   redirect(`/dashboard/timetable?status=${error ? "error" : "saved"}`);
 }
@@ -265,19 +286,18 @@ export async function applySchoolResearch(formData: FormData) {
 }
 
 export async function moveTimetableEntry(formData: FormData) {
-  const { supabase, profile } = await authorized(["school_admin", "teacher"]);
+  const { supabase, profile, user } = await authorized(["school_admin", "teacher"]);
   const id = z.string().uuid().safeParse(value(formData, "entryId"));
-  const weekday = z.coerce.number().int().min(1).max(7).safeParse(value(formData, "weekday"));
+  const weekday = z.coerce.number().int().min(1).max(5).safeParse(value(formData, "weekday"));
   if (!id.success || !weekday.success) return { success: false, message: "Ungültige Stunde." };
-  const { error } = await supabase.from("timetable_entries")
-    .update({ weekday: weekday.data })
-    .eq("id", id.data)
-    .eq("school_id", profile.school_id);
-  if (error) return { success: false, message: "Die Stunde konnte nicht verschoben werden." };
+  let query = supabase.from("timetable_entries").update({ weekday: weekday.data })
+    .eq("id", id.data).eq("school_id", profile.school_id);
+  if (profile.role === "teacher") query = query.eq("teacher_id", user.id);
+  const { error } = await query;
+  if (error) return { success: false, message: "Die Stunde konnte nicht verschoben werden. Prüfe deine Zuordnung." };
   revalidatePath("/dashboard/timetable");
   return { success: true };
 }
-
 export async function saveLessonWorksheet(formData: FormData) {
   const { supabase, profile, user } = await authorized(["school_admin", "teacher"]);
   const parsed = z.object({
