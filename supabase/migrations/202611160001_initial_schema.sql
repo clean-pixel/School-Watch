@@ -17,7 +17,7 @@ create table public.profiles (
 create table public.school_registration_requests (
  id uuid primary key default gen_random_uuid(), applicant_id uuid not null unique references auth.users(id) on delete cascade,
  school_id uuid references public.schools(id) on delete set null, school_name text not null, school_type text not null,
- street text not null, postal_code text not null, city text not null, state text not null, contact_name text not null,
+ street text not null, postal_code text not null, city text not null, region text not null, contact_name text not null,
  email text not null, state public.registration_state not null default 'pending', reviewed_by uuid references public.profiles(id) on delete set null,
  reviewed_at timestamptz, created_at timestamptz not null default now()
 );
@@ -73,7 +73,7 @@ declare m jsonb := coalesce(new.raw_user_meta_data,'{}'::jsonb); begin
  insert into public.profiles(id,role,display_name,registration_status)
  values(new.id,case when m->>'registration_type'='school' then 'school_admin'::public.app_role else 'student'::public.app_role end,coalesce(m->>'contact_name',split_part(new.email,'@',1)),case when m->>'registration_type'='school' then 'pending'::public.registration_state else 'approved'::public.registration_state end);
  if m->>'registration_type'='school' then
-  insert into public.school_registration_requests(applicant_id,school_name,school_type,street,postal_code,city,state,contact_name,email)
+  insert into public.school_registration_requests(applicant_id,school_name,school_type,street,postal_code,city,region,contact_name,email)
   values(new.id,m->>'school_name',m->>'school_type',m->>'street',m->>'postal_code',m->>'city',m->>'state',m->>'contact_name',new.email);
  end if; return new; end $$;
 create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
