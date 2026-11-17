@@ -61,7 +61,7 @@ export default async function DashboardSection({ params, searchParams }: { param
     ]);
     studentsForClasses = studentResult.data ?? [];
     if (teacherResult.data?.length) {
-      const teacherProfiles = await supabase.from("profiles").select("id,display_name").in("id", teacherResult.data.map((teacher) => teacher.id)).order("display_name");
+      const teacherProfiles = await supabase.from("profiles").select("id,display_name").in("id", teacherResult.data.map((teacher) => teacher.id)).eq("school_id", profile.school_id).eq("role", "teacher").eq("registration_status", "approved").order("display_name");
       teachersForClasses = teacherProfiles.data ?? [];
     }
     loadError = loadError || !!studentResult.error || !!teacherResult.error;
