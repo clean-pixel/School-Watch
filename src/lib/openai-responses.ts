@@ -27,7 +27,7 @@ export async function runOpenAIResponse({ input, useWebSearch = false, maxOutput
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-6-astra",
+      model: process.env.OPENAI_MODEL || "gpt-6-luna",
       input,
       ...(tools ? { tools, tool_choice: "auto" } : {}),
       max_output_tokens: maxOutputTokens,
