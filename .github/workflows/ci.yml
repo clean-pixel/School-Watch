@@ -1,0 +1,32 @@
+name: SchulWatch checks
+
+on:
+  push:
+    branches:
+      - copilot/schulwatch-purple-polish
+  pull_request:
+    branches:
+      - copilot/schulwatch-one-foundation
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Abhängigkeiten installieren
+        run: npm install --no-audit --no-fund
+      - name: TypeScript prüfen
+        run: npm run typecheck
+      - name: Tests ausführen
+        run: npm test
+      - name: Produktions-Build prüfen
+        run: npm run build
