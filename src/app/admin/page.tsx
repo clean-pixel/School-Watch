@@ -22,7 +22,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const [{ data: requests, error }, query] = await Promise.all([
     supabase
       .from("school_registration_requests")
-      .select("id,school_name,school_type,street,postal_code,city,state,contact_name,email,created_at")
+      .select("id,school_name,school_type,street,postal_code,city,region,contact_name,email,created_at")
       .eq("state", "pending")
       .order("created_at", { ascending: true }),
     searchParams,
@@ -50,7 +50,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <div className="eyebrow">Offener Antrag</div>
             <h2 style={{ fontSize: "1.5rem" }}>{request.school_name}</h2>
             <p><strong>Schulart:</strong> {request.school_type}</p>
-            <p><strong>Adresse:</strong> {request.street}, {request.postal_code} {request.city}, {request.state}</p>
+            <p><strong>Adresse:</strong> {request.street}, {request.postal_code} {request.city}, {request.region}</p>
             <p><strong>Kontakt:</strong> {request.contact_name}<br /><a href={`mailto:${request.email}`}>{request.email}</a></p>
             <p><strong>Eingegangen:</strong> {new Date(request.created_at).toLocaleString("de-DE")}</p>
             <div className="actions">
