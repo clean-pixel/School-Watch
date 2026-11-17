@@ -79,12 +79,10 @@ export async function createTimetableEntry(formData: FormData) {
     redirect("/dashboard/timetable?status=teacher-subject");
   }
 
-  if (profile.role === "teacher") {
-    const { data: assignment, error: assignmentError } = await supabase.from("teacher_assignments")
-      .select("id").eq("school_id", profile.school_id).eq("class_id", parsed.data.classId)
-      .eq("teacher_id", user.id).eq("subject", parsed.data.subject).maybeSingle();
-    if (assignmentError || !assignment) redirect("/dashboard/timetable?status=teacher-subject");
-  }
+  const { data: assignment, error: assignmentError } = await supabase.from("teacher_assignments")
+    .select("id").eq("school_id", profile.school_id).eq("class_id", parsed.data.classId)
+    .eq("teacher_id", teacherId).eq("subject", parsed.data.subject).maybeSingle();
+  if (assignmentError || !assignment) redirect("/dashboard/timetable?status=teacher-subject");
 
   const { data: existingTimetable, error: lookupError } = await supabase.from("timetables")
     .select("id").eq("school_id", profile.school_id).eq("class_id", parsed.data.classId)
@@ -294,11 +292,43 @@ export async function moveTimetableEntry(formData: FormData) {
   const id = z.string().uuid().safeParse(value(formData, "entryId"));
   const weekday = z.coerce.number().int().min(1).max(5).safeParse(value(formData, "weekday"));
   if (!id.success || !weekday.success) return { success: false, message: "Ungültige Stunde." };
-  let query = supabase.from("timetable_entries").update({ weekday: weekday.data })
+
+  let entryQuery = supabase.from("timetable_entries")
+    .select("id,timetable_id,weekday,starts_at,ends_at,teacher_id,week_type")
     .eq("id", id.data).eq("school_id", profile.school_id);
-  if (profile.role === "teacher") query = query.eq("teacher_id", user.id);
-  const { error } = await query;
-  if (error) return { success: false, message: "Die Stunde konnte nicht verschoben werden. Prüfe deine Zuordnung." };
+  if (profile.role === "teacher") entryQuery = entryQuery.eq("teacher_id", user.id);
+  const { data: entry, error: entryError } = await entryQuery.maybeSingle();
+  if (entryError || !entry) return { success: false, message: "Diese Stunde darfst du nicht bearbeiten." };
+
+  const weeksOverlap = (other: { week_type: string }) =>
+    entry.week_type === "both" || other.week_type === "both" || entry.week_type === other.week_type;
+  const timesOverlap = (other: { starts_at: string; ends_at: string }) =>
+    entry.starts_at.slice(0, 5) < other.ends_at.slice(0, 5) &&
+    entry.ends_at.slice(0, 5) > other.starts_at.slice(0, 5);
+
+  const { data: classEntries, error: classError } = await supabase.from("timetable_entries")
+    .select("id,starts_at,ends_at,week_type")
+    .eq("school_id", profile.school_id).eq("timetable_id", entry.timetable_id)
+    .eq("weekday", weekday.data).neq("id", id.data);
+  if (classError) return { success: false, message: "Der Stundenplan konnte nicht geprüft werden." };
+  if ((classEntries ?? []).some((other) => weeksOverlap(other) && timesOverlap(other))) {
+    return { success: false, message: "In dieser Klasse liegt zu dieser Zeit bereits Unterricht." };
+  }
+
+  if (entry.teacher_id) {
+    const { data: teacherEntries, error: teacherError } = await supabase.from("timetable_entries")
+      .select("id,starts_at,ends_at,week_type")
+      .eq("school_id", profile.school_id).eq("teacher_id", entry.teacher_id)
+      .eq("weekday", weekday.data).neq("id", id.data);
+    if (teacherError) return { success: false, message: "Der Lehrkraftplan konnte nicht geprüft werden." };
+    if ((teacherEntries ?? []).some((other) => weeksOverlap(other) && timesOverlap(other))) {
+      return { success: false, message: "Die Lehrkraft hat zu dieser Zeit bereits Unterricht." };
+    }
+  }
+
+  const { error } = await supabase.from("timetable_entries")
+    .update({ weekday: weekday.data }).eq("id", id.data).eq("school_id", profile.school_id);
+  if (error) return { success: false, message: "Die Stunde konnte nicht verschoben werden." };
   revalidatePath("/dashboard/timetable");
   return { success: true };
 }
