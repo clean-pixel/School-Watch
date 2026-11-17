@@ -227,11 +227,20 @@ export async function createClassSubject(formData: FormData) {
   const { supabase, profile } = await authorized(["school_admin"]);
   const classId = z.string().uuid().safeParse(value(formData, "classId"));
   const subject = z.string().trim().min(1).max(100).safeParse(value(formData, "subject"));
-  const lessons = z.coerce.number().int().min(1).max(20).optional().safeParse(value(formData, "weeklyLessons") || undefined);
-  if (!classId.success || !subject.success || !lessons.success) redirect("/dashboard/schule-setup?status=invalid");
+  const periodsA = z.coerce.number().int().min(0).max(30).optional().safeParse(value(formData, "weeklyPeriodsA") || undefined);
+  const periodsB = z.coerce.number().int().min(0).max(30).optional().safeParse(value(formData, "weeklyPeriodsB") || undefined);
+  if (!classId.success || !subject.success || !periodsA.success || !periodsB.success) redirect("/dashboard/schule-setup?status=invalid");
+
+  const { data: classRow, error: classError } = await supabase.from("classes")
+    .select("id").eq("id", classId.data).eq("school_id", profile.school_id).maybeSingle();
+  if (classError || !classRow) redirect("/dashboard/schule-setup?status=invalid");
+
   const { error } = await supabase.from("class_subjects").upsert({
-    school_id: profile.school_id, class_id: classId.data, subject: subject.data,
-    weekly_lessons: lessons.data ?? null
+    school_id: profile.school_id,
+    class_id: classId.data,
+    subject: subject.data,
+    weekly_periods_a: periodsA.data ?? null,
+    weekly_periods_b: periodsB.data ?? null,
   }, { onConflict: "class_id,subject" });
   redirect(`/dashboard/schule-setup?status=${error ? "error" : "saved"}`);
 }
