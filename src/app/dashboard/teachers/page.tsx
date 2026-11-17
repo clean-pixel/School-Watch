@@ -66,8 +66,8 @@ export default async function TeachersPage({ searchParams }: { searchParams: Pro
         <label className="field">Lehrkraft
           <select name="teacherId" required defaultValue=""><option value="" disabled>Lehrkraft wählen</option>{teachers.filter((teacher)=>names.get(teacher.id)?.registration_status==="approved").map((teacher)=><option key={teacher.id} value={teacher.id}>{names.get(teacher.id)?.display_name || "Lehrkraft"} · {(teacher.subjects ?? []).join(", ") || "Noch keine Fächer"}</option>)}</select>
         </label>
-        <label className="field">Fach
-          <select name="subject" required defaultValue=""><option value="" disabled>Fach wählen</option>{(subjectResult.data ?? []).map((item,index)=><option key={item.class_id+"-"+item.subject+"-"+index} value={item.subject}>{classes.find((c)=>c.id===item.class_id)?.name} · {item.subject}</option>)}</select>
+        <label className="field">Fach (muss in der gewählten Klasse hinterlegt sein)
+          <input name="subject" required maxLength={100} placeholder="z. B. Mathematik"/>
         </label>
         <div className="full"><button className="button">Zuordnung speichern</button></div>
       </form>
