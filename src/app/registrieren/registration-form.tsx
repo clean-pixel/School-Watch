@@ -10,12 +10,35 @@ export type SchoolOption = { id: string; name: string; city: string };
 
 type Props = { schools: SchoolOption[]; initialRole: RegistrationRole; setupError: boolean };
 
-export function RegistrationForm({ schools, initialRole, setupError }: Props) {
+export function RegistrationForm({ schools: initialSchools, initialRole, setupError: initialSetupError }: Props) {
   const router = useRouter();
   const [role, setRole] = useState<RegistrationRole>(initialRole);
+  const [schools, setSchools] = useState(initialSchools);
+  const [setupError, setSetupError] = useState(initialSetupError);
+  const [loadingSchools, setLoadingSchools] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  async function refreshSchools() {
+    setLoadingSchools(true);
+    setSetupError(false);
+    try {
+      const supabase = createClient();
+      const { data, error: rpcError } = await supabase.rpc("available_schools");
+      if (rpcError) {
+        setSetupError(true);
+        setSchools([]);
+      } else {
+        setSchools((data ?? []) as SchoolOption[]);
+      }
+    } catch {
+      setSetupError(true);
+      setSchools([]);
+    } finally {
+      setLoadingSchools(false);
+    }
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -36,7 +59,7 @@ export function RegistrationForm({ schools, initialRole, setupError }: Props) {
 
     const schoolId = String(form.get("schoolId") ?? "");
     if (role !== "schule" && !schools.some((school) => school.id === schoolId)) {
-      setError("Bitte wähle eine verfügbare Schule aus.");
+      setError("Bitte lade die Schulliste neu und wähle eine verfügbare Schule aus.");
       setBusy(false);
       return;
     }
@@ -65,11 +88,14 @@ export function RegistrationForm({ schools, initialRole, setupError }: Props) {
         },
       });
       if (signupError) {
-        setError("Registrierung fehlgeschlagen. Prüfe deine Angaben und ob die Supabase-Migrationen eingerichtet sind.");
+        setError("Registrierung fehlgeschlagen. Prüfe deine Angaben, Supabase-Einstellungen und ob die Migrationen ausgeführt wurden.");
       } else if (data.session) {
+        // Supabase creates a session immediately when email confirmation is disabled.
         router.replace("/dashboard");
         router.refresh();
       } else {
+        // A missing session means Supabase requires email confirmation. We cannot safely
+        // bypass that requirement from the browser; the callback signs the user in.
         setSubmitted(true);
       }
     } catch {
@@ -81,12 +107,12 @@ export function RegistrationForm({ schools, initialRole, setupError }: Props) {
 
   if (submitted) return <main className="formwrap">
     <Link className="brand" href="/"><span className="brand-mark">S</span> SchulWatch One</Link>
-    <h1 style={{ fontSize: "2rem" }}>{role === "schule" ? "Schulkonto erstellt" : "Registrierung eingegangen"}</h1>
+    <h1 style={{ fontSize: "2rem" }}>{role === "schule" ? "Schule erstellt" : "Registrierung eingegangen"}</h1>
     {role === "schule"
-      ? <p>Dein Konto ist als Schulleitung eingerichtet. Bestätige, falls verlangt, deine E-Mail-Adresse. Danach kannst du dich anmelden und direkt den Schulbereich öffnen.</p>
+      ? <p>Deine Schule und dein Schulleitungskonto sind erstellt. Supabase verlangt in diesem Projekt noch eine E-Mail-Bestätigung. Öffne den Link in deinem Postfach; danach wirst du direkt zum Dashboard weitergeleitet. Die E-Mail-Adresse ist zugleich dein Login.</p>
       : role === "lehrer"
-        ? <p>Deine ausgewählte Schule muss den Lehrkraft-Zugang erst freigeben. Eine zusätzliche E-Mail-Bestätigung hängt von deinen Supabase-Einstellungen ab.</p>
-        : <p>Dein Schülerkonto wurde der ausgewählten Schule zugeordnet. Bestätige, falls verlangt, deine E-Mail-Adresse.</p>}
+        ? <p>Deine ausgewählte Schule muss den Lehrkraft-Zugang erst freigeben. Falls Supabase E-Mail-Bestätigung verlangt, öffne zusätzlich den Link in deinem Postfach.</p>
+        : <p>Dein Schülerkonto wurde der ausgewählten Schule zugeordnet. Falls Supabase E-Mail-Bestätigung verlangt, öffne den Link in deinem Postfach.</p>}
     <Link className="button" href="/anmelden">Zur Anmeldung</Link>
   </main>;
 
@@ -94,7 +120,7 @@ export function RegistrationForm({ schools, initialRole, setupError }: Props) {
     <Link className="brand" href="/"><span className="brand-mark">S</span> SchulWatch One</Link>
     <h1 style={{ fontSize: "2rem" }}>Konto erstellen</h1>
     <p>Schulen und Schüler starten direkt. Lehrkräfte können erst nach Freigabe durch die Schule auf deren Bereich zugreifen.</p>
-    {setupError && <div className="notice" role="alert">Die Schulliste konnte nicht geladen werden. Prüfe, ob die Supabase-Migrationen bis einschließlich 005 ausgeführt wurden.</div>}
+    {setupError && <div className="notice" role="alert">Die Schulliste konnte nicht geladen werden. Prüfe die Supabase-Migrationen bis einschließlich 009 und lade die Liste erneut.</div>}
     {error && <div className="notice" role="alert">{error}</div>}
     <form onSubmit={submit}>
       <label className="field">Ich registriere mich als
@@ -107,13 +133,17 @@ export function RegistrationForm({ schools, initialRole, setupError }: Props) {
       <label className="field">{role === "schule" ? "Name der verantwortlichen Schulleitung" : "Vor- und Nachname"}
         <input required name="displayName" autoComplete="name" maxLength={120} />
       </label>
-      {role !== "schule" && <label className="field">Schule
-        <select name="schoolId" required defaultValue="">
+      {role !== "schule" && <div className="field">
+        <label htmlFor="schoolId">Schule</label>
+        <select id="schoolId" name="schoolId" required defaultValue="">
           <option value="" disabled>Schule auswählen</option>
           {schools.map((school) => <option key={school.id} value={school.id}>{school.name} · {school.city}</option>)}
         </select>
-        {schools.length === 0 && <span>Noch keine Schule verfügbar. Registriere zuerst eine Schule.</span>}
-      </label>}
+        {schools.length === 0 && <span>Noch keine Schule verfügbar.</span>}
+        <button className="button secondary" type="button" onClick={refreshSchools} disabled={loadingSchools}>
+          {loadingSchools ? "Schulen werden geladen…" : "Schulliste neu laden"}
+        </button>
+      </div>}
       {role === "schule" && <>
         <label className="field">Schulname<input required name="schoolName" maxLength={160} /></label>
         <label className="field">Schulart<input required name="schoolType" maxLength={100} /></label>
@@ -122,7 +152,7 @@ export function RegistrationForm({ schools, initialRole, setupError }: Props) {
         <label className="field">Stadt<input required name="city" maxLength={120} /></label>
         <label className="field">Bundesland<input required name="state" maxLength={120} /></label>
       </>}
-      <label className="field">Dienstliche E-Mail-Adresse<input required name="email" type="email" autoComplete="email" maxLength={254} /></label>
+      <label className="field">E-Mail-Adresse (wird auch für die Anmeldung benötigt)<input required name="email" type="email" autoComplete="email" maxLength={254} /></label>
       <label className="field">Passwort (12–128 Zeichen)<input required name="password" type="password" minLength={12} maxLength={128} autoComplete="new-password" /></label>
       <label className="field">Passwort bestätigen<input required name="confirmPassword" type="password" minLength={12} maxLength={128} autoComplete="new-password" /></label>
       <button className="button" disabled={busy || (role !== "schule" && schools.length === 0)}>{busy ? "Konto wird erstellt…" : "Registrieren"}</button>
