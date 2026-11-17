@@ -1,7 +1,12 @@
 export type AiCitation = { title: string; url: string };
 
+export type OpenAIInputMessage = {
+  role: "developer" | "system" | "user" | "assistant";
+  content: string;
+};
+
 type RunOptions = {
-  input: string;
+  input: string | OpenAIInputMessage[];
   useWebSearch?: boolean;
   maxOutputTokens?: number;
 };
@@ -24,7 +29,7 @@ export async function runOpenAIResponse({ input, useWebSearch = false, maxOutput
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: "Bearer " + apiKey,
     },
     body: JSON.stringify({
       model: process.env.OPENAI_MODEL || "gpt-6-luna",
@@ -42,7 +47,7 @@ export async function runOpenAIResponse({ input, useWebSearch = false, maxOutput
   };
 
   if (!response.ok) {
-    const message = payload.error?.message || `OpenAI-Anfrage fehlgeschlagen (HTTP ${response.status}).`;
+    const message = payload.error?.message || "OpenAI-Anfrage fehlgeschlagen (HTTP " + response.status + ").";
     throw new Error(message);
   }
 
