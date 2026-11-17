@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { updateTeacherSubjects, assignTeacherToClass } from "@/app/dashboard/actions";
+import { updateTeacherSubjects, assignTeacherToClass, reviewTeacher } from "@/app/dashboard/actions";
 
 export default async function TeachersPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const { status } = await searchParams;
@@ -52,11 +52,11 @@ export default async function TeachersPage({ searchParams }: { searchParams: Pro
         <h3>{request.profiles?.display_name || "Lehrkraft"}</h3>
         <p>Registriert am {new Date(request.created_at).toLocaleDateString("de-DE")}</p>
         <div className="actions">
-          <form action={async (formData) => { "use server"; const { reviewTeacher } = await import("@/app/dashboard/actions"); await reviewTeacher(formData); }}>
+          <form action={reviewTeacher}>
             <input type="hidden" name="requestId" value={request.id}/>
             <button className="button" name="decision" value="approve">Freigeben</button>
           </form>
-          <form action={async (formData) => { "use server"; const { reviewTeacher } = await import("@/app/dashboard/actions"); await reviewTeacher(formData); }}>
+          <form action={reviewTeacher}>
             <input type="hidden" name="requestId" value={request.id}/>
             <button className="button secondary" name="decision" value="reject">Ablehnen</button>
           </form>
