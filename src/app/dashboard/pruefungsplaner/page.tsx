@@ -9,7 +9,7 @@ export default async function ExamPlannerPage({ searchParams }: { searchParams: 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/anmelden");
   const { data: profile } = await supabase.from("profiles").select("role,school_id,registration_status").eq("id", user.id).maybeSingle();
-  if (!profile || profile.registration_status !== "approved") redirect("/dashboard");
+  if (!profile || profile.registration_status !== "approved" || !profile.school_id || !["student", "teacher", "school_admin"].includes(profile.role)) redirect("/dashboard");
   const student = profile.role === "student";
   const [examsResult, classesResult] = await Promise.all([
     supabase.from("exams").select("id,class_id,subject,title,starts_at").eq("school_id", profile.school_id).gte("starts_at", new Date().toISOString()).order("starts_at"),
