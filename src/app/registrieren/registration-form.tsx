@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export type RegistrationRole = "schueler" | "lehrer" | "schule";
@@ -15,10 +15,22 @@ const germanStates = [
   "Sachsen-Anhalt", "Schleswig-Holstein", "Thüringen",
 ];
 
-type Props = { schools: SchoolOption[]; initialRole: RegistrationRole; setupError: boolean };
+const REGISTRATION_DRAFT_KEY = "schulwatch-registration-draft-v1";
+const draftFields = [
+  "displayName", "schoolId", "schoolName", "schoolType", "street",
+  "postalCode", "city", "state", "email",
+] as const;
+type DraftField = (typeof draftFields)[number];
+type RegistrationDraft = {
+  role?: RegistrationRole;
+} & Partial<Record<DraftField, string>>;
+
+type Props = { schools: SchoolOption[]; initialRole: RegistrationRole; setupError: string };
 
 export function RegistrationForm({ schools: initialSchools, initialRole, setupError: initialSetupError }: Props) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+  const draftToRestore = useRef<RegistrationDraft | null>(null);
   const [role, setRole] = useState<RegistrationRole>(initialRole);
   const [schools, setSchools] = useState(initialSchools);
   const [setupError, setSetupError] = useState(initialSetupError);
@@ -27,20 +39,76 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
   const [confirmationPending, setConfirmationPending] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // Keep a registration draft on this device so navigation/reloads do not erase it.
+  // Passwords are intentionally never stored in browser storage.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(REGISTRATION_DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as RegistrationDraft;
+      draftToRestore.current = draft;
+      if (draft.role === "schueler" || draft.role === "lehrer" || draft.role === "schule") {
+        setRole(draft.role);
+      }
+    } catch {
+      window.localStorage.removeItem(REGISTRATION_DRAFT_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    const draft = draftToRestore.current;
+    const form = formRef.current;
+    if (!draft || draft.role !== role || !form) return;
+
+    for (const name of draftFields) {
+      const value = draft[name];
+      const field = form.elements.namedItem(name);
+      if (typeof value === "string" && (field instanceof HTMLInputElement || field instanceof HTMLSelectElement)) {
+        field.value = value;
+      }
+    }
+    draftToRestore.current = null;
+  }, [role]);
+
+  function saveDraft(event: React.FormEvent<HTMLFormElement>) {
+    try {
+      const formData = new FormData(event.currentTarget);
+      const storedRole = formData.get("role");
+      const draft: RegistrationDraft = {
+        role: storedRole === "schule" || storedRole === "lehrer" ? storedRole : "schueler",
+      };
+      for (const name of draftFields) {
+        const value = formData.get(name);
+        draft[name] = typeof value === "string" ? value : "";
+      }
+      window.localStorage.setItem(REGISTRATION_DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // Registration must remain usable even when browser storage is unavailable.
+    }
+  }
+
+  function clearDraft() {
+    try {
+      window.localStorage.removeItem(REGISTRATION_DRAFT_KEY);
+    } catch {
+      // Ignore unavailable browser storage.
+    }
+  }
+
   async function refreshSchools() {
     setLoadingSchools(true);
-    setSetupError(false);
+    setSetupError("");
     try {
       const supabase = createClient();
       const { data, error: rpcError } = await supabase.rpc("available_schools");
       if (rpcError) {
-        setSetupError(true);
+        setSetupError(`Schulabfrage fehlgeschlagen: ${rpcError.message}`);
         setSchools([]);
       } else {
         setSchools((data ?? []) as SchoolOption[]);
       }
-    } catch {
-      setSetupError(true);
+    } catch (cause) {
+      setSetupError(cause instanceof Error ? cause.message : "Unbekannter Verbindungsfehler.");
       setSchools([]);
     } finally {
       setLoadingSchools(false);
@@ -106,24 +174,23 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
           setError(`Registrierung fehlgeschlagen: ${signupError.message}`);
         }
       } else if (data.session) {
-        // A session means Supabase has accepted direct signup without email confirmation.
+        clearDraft();
         router.replace("/dashboard");
         router.refresh();
       } else if (data.user) {
-        // A repeated signup can return a user object without a session.
-        // First try a normal password sign-in. This does not bypass email confirmation:
-        // Supabase still enforces its own Auth settings and password checks.
         const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
 
         if (loginData.session) {
+          clearDraft();
           router.replace("/dashboard");
           router.refresh();
         } else {
           const loginMessage = loginError?.message.toLowerCase() ?? "";
           if (loginMessage.includes("email not confirmed")) {
+            clearDraft();
             setConfirmationPending(true);
           } else if (
             data.user.identities?.length === 0 ||
@@ -139,8 +206,9 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
       } else {
         setError("Supabase hat kein Konto und keine Sitzung zurückgegeben. Prüfe die Auth-Konfiguration.");
       }
-    } catch {
-      setError("Verbindung fehlgeschlagen. Bitte prüfe die Supabase-Konfiguration.");
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : "Unbekannter Verbindungsfehler.";
+      setError(`Verbindung zu Supabase fehlgeschlagen: ${detail} Prüfe die Supabase-Variablen in Vercel und starte die Website nach Änderungen neu.`);
     } finally {
       setBusy(false);
     }
@@ -149,6 +217,7 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
   return <main className="formwrap">
     <Link className="brand" href="/"><span className="brand-mark">S</span> SchulWatch One</Link>
     <h1 style={{ fontSize: "2rem" }}>{confirmationPending ? "E-Mail-Bestätigung erforderlich" : "Konto erstellen"}</h1>
+    <p className="muted">Deine Formulareingaben werden auf diesem Gerät zwischengespeichert. Passwörter werden niemals gespeichert.</p>
     {confirmationPending ? <>
       <div className="notice" role="status">
         Supabase hat für dieses Konto noch keine Anmeldungssitzung erstellt. Prüfe dein Postfach auf eine Bestätigungs-E-Mail. Falls du dieses Konto bereits früher erstellt hast, gehe über „Zur Anmeldung“ und melde dich mit deinem bestehenden Passwort an.
@@ -157,12 +226,11 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
       <Link className="button secondary" href="/anmelden">Zur Anmeldung</Link>
       <button className="button" type="button" onClick={() => { setConfirmationPending(false); setError(""); }}>Zurück</button>
     </> : <>
-      <p>Schulen und Schüler starten direkt. Lehrkräfte können erst nach Freigabe durch die Schule auf deren Bereich zugreifen.</p>
-      {setupError && <div className="notice" role="alert">Die Schulliste konnte nicht geladen werden. Prüfe die Supabase-Migrationen bis einschließlich 009 und lade die Liste erneut.</div>}
+      {setupError && <div className="notice" role="alert">Die Schulliste konnte nicht geladen werden. {setupError} Prüfe in Vercel unter Settings → Environment Variables, ob NEXT_PUBLIC_SUPABASE_URL und NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY oder NEXT_PUBLIC_SUPABASE_ANON_KEY gesetzt sind.</div>}
       {error && <div className="notice" role="alert">{error}</div>}
-      <form onSubmit={submit}>
+      <form ref={formRef} onSubmit={submit} onChange={saveDraft}>
         <label className="field">Ich registriere mich als
-          <select value={role} onChange={(event) => setRole(event.target.value as RegistrationRole)}>
+          <select name="role" value={role} onChange={(event) => setRole(event.target.value as RegistrationRole)}>
             <option value="schueler">Schüler/in</option>
             <option value="lehrer">Lehrkraft</option>
             <option value="schule">Schulleitung / Schule</option>
