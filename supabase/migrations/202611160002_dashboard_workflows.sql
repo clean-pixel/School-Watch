@@ -14,7 +14,7 @@ begin
   select * into req from public.school_registration_requests where id = p_request_id and state = 'pending' for update;
   if not found then raise exception 'registration request unavailable'; end if;
   insert into public.schools(name, school_type, street, postal_code, city, state, status)
-  values(req.school_name, req.school_type, req.street, req.postal_code, req.city, req.state, 'approved')
+  values(req.school_name, req.school_type, req.street, req.postal_code, req.city, req.region, 'approved')
   returning id into new_school_id;
   update public.profiles set school_id = new_school_id, role = 'school_admin', registration_status = 'approved'
     where id = req.applicant_id;
