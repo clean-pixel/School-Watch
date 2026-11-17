@@ -18,6 +18,12 @@ export default async function TeachersPage({ searchParams }: { searchParams: Pro
   ]);
   const teachers = teacherResult.data ?? [];
   const classes = classResult.data ?? [];
+  const requestsResult = await supabase.from("teacher_join_requests")
+    .select("id,teacher_id,created_at,profiles!teacher_join_requests_teacher_id_fkey(display_name)")
+    .eq("school_id", profile.school_id).eq("state", "pending").order("created_at");
+  const teacherRequests = (requestsResult.data ?? []) as unknown as {
+    id: string; teacher_id: string; created_at: string; profiles: { display_name: string | null } | null
+  }[];
   const namesResult = teachers.length
     ? await supabase.from("profiles").select("id,display_name,registration_status").in("id", teachers.map((item) => item.id))
     : { data: [] as { id: string; display_name: string | null; registration_status: string }[] };
@@ -28,6 +34,8 @@ export default async function TeachersPage({ searchParams }: { searchParams: Pro
     "teacher-subject": "Diese Lehrkraft ist für das gewählte Fach noch nicht eingetragen.",
     invalid: "Bitte prüfe deine Eingaben.",
     error: "Speichern fehlgeschlagen. Prüfe die Schulzuordnung und Berechtigungen.",
+    approved: "Lehrkraft wurde freigeschaltet.",
+    rejected: "Lehrkraft wurde abgelehnt.",
   };
 
   return <main className="container">
@@ -37,6 +45,25 @@ export default async function TeachersPage({ searchParams }: { searchParams: Pro
     <p>Trage ein, welche Fächer jede Lehrkraft unterrichtet. Nur diese Fächer können ihr anschließend im Stundenplan zugewiesen werden.</p>
     {status && <div className="notice" role="status">{statusMessages[status] || "Aktion abgeschlossen."}</div>}
     {teacherResult.error && <div className="notice" role="alert">Lehrkräfte konnten nicht geladen werden: {teacherResult.error.message}</div>}
+    <section className="section">
+      <h2>Offene Lehrkraft-Anmeldungen</h2>
+      {requestsResult.error && <div className="notice" role="alert">Anmeldungen konnten nicht geladen werden: {requestsResult.error.message}</div>}
+      {teacherRequests.map((request) => <article className="card" key={request.id}>
+        <h3>{request.profiles?.display_name || "Lehrkraft"}</h3>
+        <p>Registriert am {new Date(request.created_at).toLocaleDateString("de-DE")}</p>
+        <div className="actions">
+          <form action={async (formData) => { "use server"; const { reviewTeacher } = await import("@/app/dashboard/actions"); await reviewTeacher(formData); }}>
+            <input type="hidden" name="requestId" value={request.id}/>
+            <button className="button" name="decision" value="approve">Freigeben</button>
+          </form>
+          <form action={async (formData) => { "use server"; const { reviewTeacher } = await import("@/app/dashboard/actions"); await reviewTeacher(formData); }}>
+            <input type="hidden" name="requestId" value={request.id}/>
+            <button className="button secondary" name="decision" value="reject">Ablehnen</button>
+          </form>
+        </div>
+      </article>)}
+      {teacherRequests.length === 0 && !requestsResult.error && <article className="card"><p>Keine offenen Lehrkraft-Anmeldungen.</p></article>}
+    </section>
     <section className="section">
       <h2>Fächer der Lehrkräfte</h2>
       {teachers.length === 0 ? <article className="card"><p>Für deine Schule sind noch keine freigegebenen Lehrkräfte vorhanden. Lehrkräfte müssen sich zuerst mit deiner Schule registrieren und von der Schulleitung freigegeben werden.</p></article> :
