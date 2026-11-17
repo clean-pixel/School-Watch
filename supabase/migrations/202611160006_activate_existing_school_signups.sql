@@ -15,7 +15,7 @@ begin
   loop
     insert into public.schools(name, school_type, street, postal_code, city, state, status)
     values (request_row.school_name, request_row.school_type, request_row.street,
-      request_row.postal_code, request_row.city, request_row.state, 'approved')
+      request_row.postal_code, request_row.city, request_row.region, 'approved')
     returning id into created_school_id;
 
     update public.school_registration_requests
