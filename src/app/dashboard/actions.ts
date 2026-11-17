@@ -88,12 +88,14 @@ export async function createTimetableEntry(formData: FormData) {
   redirect(`/dashboard/timetable?status=${error ? "error" : "saved"}`);
 }
 export async function sendSchoolMessage(formData: FormData) {
-  const { supabase, profile, user } = await authorized(["teacher", "school_admin"]);
+  const { supabase } = await authorized(["teacher", "school_admin"]);
   const parsed = messageInput.safeParse({ recipientId: value(formData, "recipientId"), subject: value(formData, "subject"), body: value(formData, "body") });
   if (!parsed.success) redirect("/dashboard/messages?status=invalid");
-  const { data: message, error: messageError } = await supabase.from("messages").insert({ school_id: profile.school_id, sender_id: user.id, subject: parsed.data.subject, body: parsed.data.body }).select("id").single();
-  if (messageError || !message) redirect("/dashboard/messages?status=error");
-  const { error } = await supabase.from("message_recipients").insert({ message_id: message.id, recipient_id: parsed.data.recipientId });
+  const { error } = await supabase.rpc("send_school_message", {
+    p_recipient_id: parsed.data.recipientId,
+    p_subject: parsed.data.subject,
+    p_body: parsed.data.body,
+  });
   redirect(`/dashboard/messages?status=${error ? "error" : "saved"}`);
 }
 export async function assignStudentToClass(formData: FormData) {
