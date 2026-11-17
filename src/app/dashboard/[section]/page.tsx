@@ -45,7 +45,7 @@ export default async function DashboardSection({ params, searchParams }: { param
     const result = await supabase.from("devices").select("id,status,last_seen_at,created_at").order("created_at", { ascending: false }); rows = (result.data ?? []) as Row[]; loadError = !!result.error;
   }
   let classes: SchoolClass[] = [];
-  if (["homework", "timetable", "platform"].includes(section) && profile.school_id) {
+  if (["classes", "homework", "timetable", "platform"].includes(section) && profile.school_id) {
     const result = await supabase.from("classes").select("id,name").eq("school_id", profile.school_id).order("name"); classes = result.data ?? [];
   }
   let students: Person[] = [];
