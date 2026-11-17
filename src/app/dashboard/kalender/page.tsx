@@ -14,7 +14,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const [{ data: memberships }, { data: classes }, { data: events }, { data: exams }, { data: changes }, { data: homework }] = await Promise.all([
     isStudent ? supabase.from("class_memberships").select("class_id").eq("student_id", user.id) : Promise.resolve({ data: [] as { class_id: string }[] }),
     !isStudent ? supabase.from("classes").select("id,name").eq("school_id", profile.school_id).order("name") : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-    supabase.from("school_events").select("id,title,starts_at,description").eq("school_id", profile.school_id).gte("starts_at", new Date().toISOString()).order("starts_at").limit(50),
+    supabase.from("school_events").select("id,title,starts_at,description,class_id").eq("school_id", profile.school_id).gte("starts_at", new Date().toISOString()).order("starts_at").limit(50),
     supabase.from("exams").select("id,title,subject,starts_at,class_id").eq("school_id", profile.school_id).gte("starts_at", new Date().toISOString()).order("starts_at").limit(50),
     supabase.from("schedule_changes").select("id,title,details,change_type,applies_at,class_id").eq("school_id", profile.school_id).gte("applies_at", new Date().toISOString()).order("applies_at").limit(50),
     supabase.from("homework").select("id,subject,description,due_at,class_id").eq("school_id", profile.school_id).gte("due_at", new Date().toISOString()).order("due_at").limit(50),
