@@ -51,7 +51,7 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
         setRole(draft.role);
       }
     } catch {
-      window.localStorage.removeItem(REGISTRATION_DRAFT_KEY);
+      try { window.localStorage.removeItem(REGISTRATION_DRAFT_KEY); } catch { /* Browser storage may be disabled. */ }
     }
   }, []);
 
