@@ -15,10 +15,15 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
   const { data: profile } = await supabase.from("profiles").select("role,school_id,registration_status").eq("id", user.id).maybeSingle();
   if (!profile || !profile.school_id || profile.registration_status !== "approved" || !["school_admin", "teacher"].includes(profile.role)) redirect("/dashboard");
 
-  const [schoolResult, classResult] = await Promise.all([
-    supabase.from("schools").select("name,state,day_start_time,day_end_time").eq("id", profile.school_id).maybeSingle(),
-    supabase.from("classes").select("id,name,grade").eq("school_id", profile.school_id).order("name"),
-  ]);
+  const schoolResult = await supabase.from("schools").select("name,state,day_start_time,day_end_time").eq("id", profile.school_id).maybeSingle();
+  let classQuery = supabase.from("classes").select("id,name,grade").eq("school_id", profile.school_id).order("name");
+  if (profile.role === "teacher") {
+    const { data: assignments } = await supabase.from("teacher_assignments")
+      .select("class_id").eq("school_id", profile.school_id).eq("teacher_id", user.id);
+    const assignedIds = [...new Set((assignments ?? []).map((item) => item.class_id))];
+    classQuery = assignedIds.length ? classQuery.in("id", assignedIds) : classQuery.eq("id", "00000000-0000-0000-0000-000000000000");
+  }
+  const classResult = await classQuery;
   const school = schoolResult.data;
   const classes = classResult.data ?? [];
   const selectedClass = classes.find((item) => item.id === requestedClassId) ?? classes[0] ?? null;
@@ -66,15 +71,24 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
     subjects: teacher.subjects ?? [],
   })).filter((teacher) => profile.role === "school_admin" || teacher.id === user.id);
 
-  const availableSubjects = classSubjects.length
-    ? classSubjects
-    : [...new Set(teachers.flatMap((teacher) => teacher.subjects))].sort();
+  const teacherAssignmentSubjects = profile.role === "teacher" && selectedClass
+    ? await supabase.from("teacher_assignments").select("subject").eq("school_id", profile.school_id)
+        .eq("class_id", selectedClass.id).eq("teacher_id", user.id)
+    : null;
+  const availableSubjects = profile.role === "teacher"
+    ? (teacherAssignmentSubjects?.data ?? []).map((item) => item.subject).filter((item): item is string => !!item)
+    : classSubjects.length
+      ? classSubjects
+      : [...new Set(teachers.flatMap((teacher) => teacher.subjects))].sort();
 
   const statusText: Record<string, string> = {
     saved: "Unterrichtsstunde gespeichert.",
     error: "Die Stunde konnte nicht gespeichert werden. Prüfe die Klasse, Fach- und Lehrkraftzuordnung.",
     invalid: "Bitte prüfe die Angaben. Die Endzeit muss nach der Startzeit liegen.",
-    "teacher-subject": "Die ausgewählte Lehrkraft ist für dieses Fach nicht eingetragen. Trage das Fach zuerst in der Lehrkraftverwaltung ein.",
+    "teacher-subject": "Die ausgewählte Lehrkraft ist für dieses Fach nicht eingetragen oder dieser Klasse nicht zugeordnet.",
+    "teacher-required": "Bitte weise dieser Stunde eine zuständige Lehrkraft zu.",
+    "teacher-conflict": "Diese Lehrkraft hat zu dieser Zeit bereits Unterricht (in derselben Woche).",
+    "class-conflict": "Diese Klasse hat zu dieser Zeit bereits eine Stunde (in derselben Woche).",
   };
 
   return (
@@ -123,8 +137,8 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
                 <input type="time" name="endsAt" defaultValue="08:30" required />
               </label>
               <label className="field">Lehrkraft
-                <select name="teacherId" defaultValue={profile.role === "teacher" ? user.id : ""}>
-                  <option value="">Noch nicht zugeordnet</option>
+                <select name="teacherId" required defaultValue={profile.role === "teacher" ? user.id : ""} disabled={profile.role === "teacher"}>
+                  {profile.role === "school_admin" && <option value="" disabled>Lehrkraft auswählen</option>}
                   {teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}{teacher.subjects.length ? ` · ${teacher.subjects.join(", ")}` : ""}</option>)}
                 </select>
               </label>
