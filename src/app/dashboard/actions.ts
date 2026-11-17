@@ -172,9 +172,13 @@ export async function assignTeacherToClass(formData: FormData) {
   if (!classRow.data || !teacherRow.data || classRow.error || teacherRow.error) redirect("/dashboard/classes?status=invalid");
 
   const subject = value(formData, "subject").trim();
-  const teacherSubjects = await supabase.from("teachers").select("subjects").eq("id", teacherId.data).eq("school_id", profile.school_id).maybeSingle();
-  if (teacherSubjects.error || !teacherSubjects.data || (teacherSubjects.data.subjects?.length && !teacherSubjects.data.subjects.includes(subject))) {
-    redirect("/dashboard/classes?status=teacher-subject");
+  if (!subject) redirect("/dashboard/teachers?status=invalid");
+  const [teacherSubjects, classSubject] = await Promise.all([
+    supabase.from("teachers").select("subjects").eq("id", teacherId.data).eq("school_id", profile.school_id).maybeSingle(),
+    supabase.from("class_subjects").select("class_id").eq("school_id", profile.school_id).eq("class_id", classId.data).eq("subject", subject).maybeSingle(),
+  ]);
+  if (teacherSubjects.error || !teacherSubjects.data || !(teacherSubjects.data.subjects ?? []).includes(subject) || classSubject.error || !classSubject.data) {
+    redirect("/dashboard/teachers?status=teacher-subject");
   }
 
   const existingQuery = supabase.from("teacher_assignments").select("id").eq("class_id", classId.data).eq("teacher_id", teacherId.data);
