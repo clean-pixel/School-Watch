@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { RegistrationForm, type RegistrationRole, type SchoolOption } from "./registration-form";
 
+// The available school list must reflect the current Supabase data and should not
+// be served from a stale static/ISR response after a school is registered.
+export const dynamic = "force-dynamic";
+
 export default async function RegistrationPage({ searchParams }: { searchParams: Promise<{ rolle?: string }> }) {
   const { rolle } = await searchParams;
   const initialRole: RegistrationRole = rolle === "schule" || rolle === "lehrer" ? rolle : "schueler";
