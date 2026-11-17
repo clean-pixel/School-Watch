@@ -47,8 +47,16 @@ export async function runOpenAIResponse({ input, useWebSearch = false, maxOutput
   };
 
   if (!response.ok) {
-    const message = payload.error?.message || "OpenAI-Anfrage fehlgeschlagen (HTTP " + response.status + ").";
-    throw new Error(message);
+    if (response.status === 401) {
+      throw new AiConfigurationError("Der OpenAI-API-Schlüssel ist ungültig, abgelaufen oder wurde widerrufen. Ersetze OPENAI_API_KEY in Vercel durch einen gültigen Projekt-API-Schlüssel und stelle danach neu bereit.");
+    }
+    if (response.status === 403) {
+      throw new AiConfigurationError("Der OpenAI-API-Schlüssel hat keine Berechtigung für diese Anfrage. Prüfe die Schlüsselrechte und den API-Projektzugang.");
+    }
+    if (response.status === 429) {
+      throw new Error("Das OpenAI-Nutzungslimit wurde erreicht. Prüfe das API-Nutzungslimit und versuche es später erneut.");
+    }
+    throw new Error("OpenAI-Anfrage fehlgeschlagen (HTTP " + response.status + ").");
   }
 
   const content = (payload.output ?? []).flatMap((item) => item.content ?? []);
