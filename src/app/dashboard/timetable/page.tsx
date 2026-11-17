@@ -137,7 +137,7 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
                 <input type="time" name="endsAt" defaultValue="08:30" required />
               </label>
               <label className="field">Lehrkraft
-                <select name="teacherId" required defaultValue={profile.role === "teacher" ? user.id : ""} disabled={profile.role === "teacher"}>
+                <select name="teacherId" required defaultValue={profile.role === "teacher" ? user.id : ""}>
                   {profile.role === "school_admin" && <option value="" disabled>Lehrkraft auswählen</option>}
                   {teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}{teacher.subjects.length ? ` · ${teacher.subjects.join(", ")}` : ""}</option>)}
                 </select>
