@@ -32,12 +32,33 @@ export async function createClass(formData: FormData) {
 }
 
 export async function createHomework(formData: FormData) {
-  const { supabase, profile, user } = await authorized(["teacher", "school_admin"]);
-  const parsed = homeworkInput.safeParse({ classId: value(formData, "classId"), subject: value(formData, "subject"), learningScope: value(formData, "learningScope"), description: value(formData, "description"), dueAt: dateValue(formData, "dueAt") });
+  const { supabase, profile, user } = await authorized(["teacher"]);
+  const parsed = homeworkInput.safeParse({
+    classId: value(formData, "classId"),
+    subject: value(formData, "subject"),
+    learningScope: value(formData, "learningScope"),
+    description: value(formData, "description"),
+    dueAt: dateValue(formData, "dueAt"),
+  });
   if (!parsed.success) redirect("/dashboard/homework?status=invalid");
-  const { error } = await supabase.from("homework").insert({ school_id: profile.school_id, teacher_id: user.id, class_id: parsed.data.classId, subject: parsed.data.subject, learning_scope: parsed.data.learningScope || "", description: parsed.data.description, due_at: parsed.data.dueAt });
+
+  const { data: assignment, error: assignmentError } = await supabase.from("teacher_assignments")
+    .select("id").eq("school_id", profile.school_id).eq("class_id", parsed.data.classId)
+    .eq("teacher_id", user.id).eq("subject", parsed.data.subject).maybeSingle();
+  if (assignmentError || !assignment) redirect("/dashboard/homework?status=not-assigned");
+
+  const { error } = await supabase.from("homework").insert({
+    school_id: profile.school_id,
+    teacher_id: user.id,
+    class_id: parsed.data.classId,
+    subject: parsed.data.subject,
+    learning_scope: parsed.data.learningScope || "",
+    description: parsed.data.description,
+    due_at: parsed.data.dueAt,
+  });
   redirect(`/dashboard/homework?status=${error ? "error" : "saved"}`);
 }
+
 export async function createAnnouncement(formData: FormData) {
   const { supabase, profile, user } = await authorized(["teacher", "school_admin"]);
   const parsed = announcementInput.safeParse({ title: value(formData, "title"), body: value(formData, "body") });
