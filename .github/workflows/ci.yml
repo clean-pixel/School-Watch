@@ -3,9 +3,12 @@ name: SchulWatch checks
 on:
   push:
     branches:
+      - main
+      - copilot/schulwatch-one-foundation
       - copilot/schulwatch-purple-polish
   pull_request:
     branches:
+      - main
       - copilot/schulwatch-one-foundation
 
 permissions:
