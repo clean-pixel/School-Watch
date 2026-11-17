@@ -163,13 +163,13 @@ export async function assignTeacherToClass(formData: FormData) {
   const { supabase, profile } = await authorized(["school_admin"]);
   const classId = z.string().uuid().safeParse(value(formData, "classId"));
   const teacherId = z.string().uuid().safeParse(value(formData, "teacherId"));
-  if (!classId.success || !teacherId.success) redirect("/dashboard/classes?status=invalid");
+  if (!classId.success || !teacherId.success) redirect("/dashboard/teachers?status=invalid");
 
   const [classRow, teacherRow] = await Promise.all([
     supabase.from("classes").select("id").eq("id", classId.data).eq("school_id", profile.school_id).maybeSingle(),
     supabase.from("teachers").select("id").eq("id", teacherId.data).eq("school_id", profile.school_id).maybeSingle(),
   ]);
-  if (!classRow.data || !teacherRow.data || classRow.error || teacherRow.error) redirect("/dashboard/classes?status=invalid");
+  if (!classRow.data || !teacherRow.data || classRow.error || teacherRow.error) redirect("/dashboard/teachers?status=invalid");
 
   const subject = value(formData, "subject").trim();
   if (!subject) redirect("/dashboard/teachers?status=invalid");
@@ -183,7 +183,7 @@ export async function assignTeacherToClass(formData: FormData) {
 
   const existingQuery = supabase.from("teacher_assignments").select("id").eq("class_id", classId.data).eq("teacher_id", teacherId.data);
   const existing = subject ? await existingQuery.eq("subject", subject).maybeSingle() : await existingQuery.is("subject", null).maybeSingle();
-  if (existing.error) redirect("/dashboard/classes?status=error");
+  if (existing.error) redirect("/dashboard/teachers?status=error");
   if (!existing.data) {
     const { error } = await supabase.from("teacher_assignments").insert({
       school_id: profile.school_id,
@@ -191,9 +191,9 @@ export async function assignTeacherToClass(formData: FormData) {
       teacher_id: teacherId.data,
       subject: subject || null,
     });
-    if (error) redirect("/dashboard/classes?status=error");
+    if (error) redirect("/dashboard/teachers?status=error");
   }
-  redirect("/dashboard/classes?status=assigned");
+  redirect("/dashboard/teachers?status=assigned");
 }
 
 export async function reviewTeacher(formData: FormData) {
