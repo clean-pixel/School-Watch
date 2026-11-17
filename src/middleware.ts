@@ -4,7 +4,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return response;
   const supabase = createServerClient(url, key, {
     cookies: {
@@ -16,7 +16,6 @@ export async function middleware(request: NextRequest) {
       },
     },
   });
-  // Refresh/validate the session; authorization is enforced again in server routes and by RLS.
   await supabase.auth.getUser();
   return response;
 }
