@@ -102,6 +102,9 @@ export function RegistrationForm({ schools: initialSchools, initialRole, setupEr
         // A session means Supabase has accepted direct signup without email confirmation.
         router.replace("/dashboard");
         router.refresh();
+      } else if (data.user && data.user.identities?.length === 0) {
+        // Supabase returns an empty identities array for an email that is already registered.
+        setError("Für diese E-Mail-Adresse gibt es bereits ein Konto. Melde dich bitte an oder verwende eine andere E-Mail-Adresse.");
       } else if (data.user) {
         // Never claim the account is signed in when Supabase returned no session.
         // This is the expected response when email confirmation is still enabled.
