@@ -271,10 +271,20 @@ export async function updateSchoolHours(formData: FormData) {
   const start = z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/).safeParse(value(formData, "dayStart"));
   const end = z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/).safeParse(value(formData, "dayEnd"));
   if (!start.success || !end.success || end.data <= start.data) redirect("/dashboard/schule-setup?status=invalid");
-  const { error } = await supabase.from("schools").update({
-    day_start_time: start.data, day_end_time: end.data
-  }).eq("id", profile.school_id);
-  redirect(`/dashboard/schule-setup?status=${error ? "error" : "saved"}`);
+  const { data: updated, error } = await supabase.from("schools")
+    .update({ day_start_time: start.data, day_end_time: end.data })
+    .eq("id", profile.school_id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("[updateSchoolHours] Supabase error code:", error.code);
+    redirect(`/dashboard/schule-setup?status=${error.code === "42501" ? "permission" : "error"}`);
+  }
+  if (!updated) redirect("/dashboard/schule-setup?status=permission");
+
+  revalidatePath("/dashboard/schule-setup");
+  redirect("/dashboard/schule-setup?status=saved");
 }
 
 export async function applySchoolResearch(formData: FormData) {
