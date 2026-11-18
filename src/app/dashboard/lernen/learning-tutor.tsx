@@ -156,7 +156,7 @@ function renderTextSegment(source: string, keyPrefix: string): ReactNode[] {
     if (part.startsWith(backtick) && part.endsWith(backtick)) {
       return <code key={keyPrefix + "-code-" + index}>{part.slice(1, -1)}</code>;
     }
-    return <React.Fragment key={keyPrefix + "-text-" + index}>{part}</React.Fragment>;
+    return <span key={keyPrefix + "-text-" + index}>{part}</span>;
   });
 }
 
