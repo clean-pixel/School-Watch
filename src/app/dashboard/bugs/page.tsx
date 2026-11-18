@@ -17,10 +17,10 @@ export default async function BugReportsPage({ searchParams }: BugPageProps) {
   if (!user) redirect("/anmelden");
 
   const { data: profile } = await supabase.from("profiles")
-    .select("display_name,registration_status")
+    .select("display_name,registration_status,role")
     .eq("id", user.id)
     .maybeSingle();
-  if (!profile || profile.registration_status !== "approved") redirect("/dashboard");
+  if (!profile || (profile.role !== "platform_admin" && profile.registration_status !== "approved")) redirect("/dashboard");
 
   const [{ data: reports, error }, query] = await Promise.all([
     supabase.from("bug_reports")
@@ -44,7 +44,7 @@ export default async function BugReportsPage({ searchParams }: BugPageProps) {
       <Link href="/dashboard">← Übersicht</Link>
     </header>
     <div className="eyebrow">Community hilft mit</div>
-    <h1 style={{ fontSize: "2.6rem" }}>Fehler melden</h1>
+    <h1 style={{ fontSize: "2.6rem" }}>Bug melden</h1>
     <p>Findest du einen Fehler? Beschreibe kurz, was passiert ist. Jede bestätigte, hilfreiche Meldung bringt dir 25 Punkte.</p>
 
     <section className="grid bug-stats">
