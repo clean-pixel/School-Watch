@@ -13,18 +13,23 @@ export default async function LearningPage() {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!profile || profile.role !== "student" || profile.registration_status !== "approved" || !profile.school_id) {
+  const allowedRoles = ["student", "teacher", "school_admin", "platform_admin"];
+  if (!profile || !allowedRoles.includes(profile.role) ||
+      (profile.role !== "platform_admin" && profile.registration_status !== "approved")) {
     redirect("/dashboard");
   }
 
-  return <main className="container learning-page">
+  const isStudent = profile.role === "student";
+  return <main className="container learning-page teacher-ai-page">
     <header className="topbar">
       <Link className="brand" href="/dashboard"><span className="brand-mark">S</span> SchulWatch One</Link>
       <Link href="/dashboard">← Übersicht</Link>
     </header>
-    <div className="eyebrow">Deine Lern-KI</div>
-    <h1 style={{ fontSize: "2.7rem" }}>Frag einfach drauflos.</h1>
-    <p>Stell Fragen zu Mathe, Deutsch, Englisch, Naturwissenschaften und vielem mehr. Die KI erklärt dir Dinge Schritt für Schritt.</p>
-    <LearningTutor />
+    <div className="eyebrow">{isStudent ? "Dein persönlicher Lernassistent" : "Dein KI-Assistent für Schul- und Unterrichtsfragen"}</div>
+    <h1 style={{ fontSize: "2.7rem" }}>SchulWatch KI</h1>
+    <p>{isStudent
+      ? "Ein freier Chat wie ChatGPT: Stelle Fragen zu jedem Schulfach, lass dir Themen erklären, übe für Klassenarbeiten oder beginne ein ganz neues Gespräch."
+      : "Ein freier Chat wie ChatGPT für Fragen, Ideen, Texte und den Schulalltag. Für Fach-Chats und spezielle Lehrkräfte-Werkzeuge kannst du zusätzlich den Lehrer-KI-Bereich nutzen."}</p>
+    <LearningTutor userRole={profile.role} />
   </main>;
 }
