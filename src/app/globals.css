@@ -396,3 +396,140 @@ code { max-width: 100%; overflow-wrap: anywhere; color: #d8c9ff; }
   .classbook-student select { max-width: 48%; }
   .classbook-form-heading { align-items: flex-start; }
 }
+
+
+/* ChatGPT-style teacher assistant */
+.teacher-ai-page > .eyebrow { margin-top: 28px; }
+.teacher-ai-page > h1 { margin-bottom: 8px; }
+.teacher-ai-page > h1 + p { max-width: 780px; color: var(--muted); }
+.teacher-ai-shell {
+  grid-template-columns: 264px minmax(0, 1fr);
+  min-height: 760px;
+  height: min(78vh, 900px);
+  margin-top: 22px;
+  border: 1px solid #302c3b;
+  border-radius: 18px;
+  background: #17161d;
+  box-shadow: 0 18px 55px rgba(0,0,0,.23);
+}
+.teacher-ai-sidebar {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 18px 12px 12px;
+  border-right: 1px solid #302c3b;
+  background: #111017;
+}
+.teacher-ai-brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 18px; }
+.teacher-ai-brand > span:last-child { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.teacher-ai-brand strong { color: #f5f2fb; font-size: .94rem; }
+.teacher-ai-brand small { color: #9d98a9; font-size: .72rem; }
+.teacher-ai-brand-mark, .teacher-ai-welcome-mark {
+  display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center;
+  border-radius: 11px; background: linear-gradient(145deg, #b69aff, #7045d2); color: white; font-weight: 850;
+}
+.teacher-ai-new-chat {
+  display: flex; min-height: 42px; align-items: center; gap: 9px; margin: 0 2px 23px; padding: 9px 12px;
+  border: 1px solid #393444; border-radius: 11px; background: #1c1924; color: #f3effb; text-align: left; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.teacher-ai-new-chat:hover { border-color: #9b7cf1; background: #272132; }
+.teacher-ai-new-chat:disabled { opacity: .55; cursor: not-allowed; }
+.teacher-ai-new-chat > span { font-size: 1.2rem; line-height: 1; }
+.teacher-ai-history-title { padding: 0 9px 9px; color: #8e8999; font-size: .72rem; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
+.teacher-ai-chat-list { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 3px; overflow-y: auto; }
+.teacher-ai-chat-link {
+  display: flex; width: 100%; align-items: center; gap: 8px; margin: 0; padding: 10px 9px;
+  border: 1px solid transparent; border-radius: 9px; background: transparent; color: #eae6f1; text-align: left; cursor: pointer;
+}
+.teacher-ai-chat-link:hover, .teacher-ai-chat-link.active { border-color: transparent; background: #272330; }
+.teacher-ai-chat-icon { width: 20px; flex: 0 0 20px; color: #a78bfa; font-size: 1.25rem; text-align: center; }
+.teacher-ai-chat-label { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.teacher-ai-chat-label strong { overflow: hidden; color: #eeeaf5; font-size: .82rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.teacher-ai-chat-label small { overflow: hidden; color: #9690a1; font-size: .71rem; text-overflow: ellipsis; white-space: nowrap; }
+.teacher-ai-sidebar-footer { margin-top: 12px; padding: 12px 8px 4px; border-top: 1px solid #2a2632; color: #9690a1; font-size: .72rem; }
+.teacher-ai-conversation { min-height: 0; height: 100%; background: #17161d; }
+.teacher-ai-conversation-head { min-height: 68px; padding: 12px 24px; border-bottom: 1px solid #302c3b; }
+.teacher-ai-context { display: flex; flex-direction: column; gap: 2px; }
+.teacher-ai-context-label { color: #9b83e8 !important; font-size: .61rem !important; font-weight: 800; letter-spacing: .1em; }
+.teacher-ai-context strong { color: #f3eff9; font-size: .95rem; }
+.teacher-ai-context > span:last-child { color: #a29cab; font-size: .72rem; }
+.teacher-ai-ready { color: #a29cab; font-size: .72rem; }
+.teacher-ai-ready i { background: #73d6a3; box-shadow: 0 0 8px rgba(115,214,163,.3); }
+.teacher-ai-messages { display: flex; min-height: 0; max-height: none; flex: 1; flex-direction: column; gap: 4px; padding: 28px clamp(16px, 5vw, 68px) 20px; }
+.teacher-ai-welcome { width: min(650px, 100%); margin: auto; padding: 34px 0; text-align: center; }
+.teacher-ai-welcome-mark { width: 48px; height: 48px; margin: 0 auto 18px; border-radius: 15px; font-size: 1.2rem; }
+.teacher-ai-welcome-eyebrow { margin-bottom: 10px; color: #a78bfa; font-size: .65rem; font-weight: 800; letter-spacing: .15em; }
+.teacher-ai-welcome h2 { margin: 0 0 10px; color: #f5f1fc; font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -.035em; }
+.teacher-ai-welcome p { max-width: 570px; margin: 0 auto; color: #aaa4b4; font-size: .9rem; line-height: 1.65; }
+.teacher-ai-prompts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 28px; }
+.teacher-ai-prompts button {
+  display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px;
+  border: 1px solid #393444; border-radius: 12px; background: #1c1a23; color: #eae6f1; cursor: pointer; text-align: left;
+  transition: border-color .15s, background .15s;
+}
+.teacher-ai-prompts button:hover { border-color: #9475e9; background: #24202e; }
+.teacher-ai-prompts button span:last-child { color: #a78bfa; }
+.teacher-ai-message { display: flex; max-width: 850px; align-items: flex-start; gap: 12px; margin: 12px auto; width: 100%; }
+.teacher-ai-message.user { justify-content: flex-end; }
+.teacher-ai-message-avatar { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 10px; background: linear-gradient(145deg, #b69aff, #7045d2); font-size: .8rem; }
+.teacher-ai-message-body { max-width: min(760px, 88%); min-width: 0; }
+.teacher-ai-message-body > small { display: block; margin: 0 0 6px; color: #a78bfa; font-size: .72rem; font-weight: 750; }
+.teacher-ai-message.user .teacher-ai-message-body { padding: 11px 15px; border: 1px solid #4a3d63; border-radius: 18px; background: #292333; }
+.teacher-ai-message.user .teacher-ai-message-body > small { color: #c7b5ff; }
+.teacher-ai-message-content { color: #eeeaf4; font-size: .93rem; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+.teacher-ai-message.assistant .teacher-ai-message-content { padding-top: 1px; }
+.teacher-ai-typing { display: flex; align-items: center; gap: 5px; color: #aaa4b4; font-size: .85rem; }
+.teacher-ai-typing i { width: 5px; height: 5px; border-radius: 50%; background: #a78bfa; opacity: .8; }
+.teacher-ai-composer-wrap { width: min(900px, calc(100% - 48px)); margin: 0 auto; padding: 10px 0 12px; }
+.teacher-ai-composer {
+  display: block; margin: 0; padding: 12px 13px 10px; border: 1px solid #484153; border-radius: 22px;
+  background: #211f28; box-shadow: 0 8px 28px rgba(0,0,0,.18);
+}
+.teacher-ai-composer:focus-within { border-color: #8d70df; box-shadow: 0 0 0 2px rgba(141,112,223,.12); }
+.teacher-ai-composer textarea {
+  display: block; width: 100%; min-height: 43px; max-height: 170px; resize: vertical; padding: 7px 8px 9px;
+  border: 0; outline: 0; background: transparent; box-shadow: none; color: #f4f0fa; font: inherit; line-height: 1.5;
+}
+.teacher-ai-composer textarea:focus { border: 0; outline: 0; box-shadow: none; }
+.teacher-ai-composer textarea::placeholder { color: #9993a3; }
+.teacher-ai-composer-tools { display: flex; align-items: center; gap: 12px; padding: 4px 2px 0; }
+.teacher-ai-tool-picker { display: inline-flex; align-items: center; gap: 5px; color: #c3b2f8; }
+.teacher-ai-tool-picker > span { font-size: 1.15rem; }
+.teacher-ai-tool-picker select { max-width: 185px; min-height: 32px; padding: 4px 24px 4px 6px; border: 0; background: transparent; color: #d9d0ed; font-size: .75rem; }
+.teacher-ai-tool-picker select:focus { outline: 1px solid #8d70df; }
+.teacher-ai-tool-picker option { background: #211f28; color: #f4f0fa; }
+.teacher-ai-enter-hint { flex: 1; color: #858091; font-size: .66rem; text-align: right; }
+.teacher-ai-send {
+  display: grid; width: 35px; height: 35px; flex: 0 0 35px; place-items: center; border: 0; border-radius: 50%;
+  background: #a78bfa; color: #17131f; font-size: 1.3rem; font-weight: 850; cursor: pointer;
+}
+.teacher-ai-send:hover:not(:disabled) { background: #c0adff; }
+.teacher-ai-send:disabled { opacity: .4; cursor: not-allowed; }
+.teacher-ai-footnote { margin: 9px 4px 0; color: #858091; font-size: .67rem; text-align: center; }
+.teacher-ai-save-row { margin: 0 auto 10px; width: min(900px, calc(100% - 48px)); }
+.teacher-ai-notice { width: min(900px, calc(100% - 48px)); margin: 0 auto 10px; }
+@media (max-width: 900px) {
+  .teacher-ai-shell { grid-template-columns: 1fr; height: auto; min-height: 720px; }
+  .teacher-ai-sidebar { max-height: 230px; border-right: 0; border-bottom: 1px solid #302c3b; }
+  .teacher-ai-brand { padding-bottom: 12px; }
+  .teacher-ai-new-chat { margin-bottom: 12px; }
+  .teacher-ai-chat-list { max-height: 120px; }
+  .teacher-ai-chat-link { display: flex; width: 100%; min-width: 0; }
+  .teacher-ai-conversation { min-height: 620px; height: auto; }
+  .teacher-ai-messages { min-height: 430px; }
+}
+@media (max-width: 600px) {
+  .teacher-ai-shell { min-height: 0; margin-top: 14px; border-radius: 13px; }
+  .teacher-ai-sidebar { max-height: 200px; }
+  .teacher-ai-conversation { min-height: 620px; }
+  .teacher-ai-conversation-head { padding: 11px 14px; }
+  .teacher-ai-messages { min-height: 390px; padding: 20px 12px; }
+  .teacher-ai-welcome { padding: 20px 0; }
+  .teacher-ai-prompts { grid-template-columns: 1fr; gap: 8px; margin-top: 20px; }
+  .teacher-ai-composer-wrap { width: calc(100% - 18px); }
+  .teacher-ai-composer { padding: 10px; border-radius: 18px; }
+  .teacher-ai-enter-hint { display: none; }
+  .teacher-ai-tool-picker select { max-width: 155px; }
+  .teacher-ai-save-row, .teacher-ai-notice { width: calc(100% - 18px); }
+}
