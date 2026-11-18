@@ -533,3 +533,81 @@ code { max-width: 100%; overflow-wrap: anywhere; color: #d8c9ff; }
   .teacher-ai-tool-picker select { max-width: 155px; }
   .teacher-ai-save-row, .teacher-ai-notice { width: calc(100% - 18px); }
 }
+
+
+/* Readable mathematical notation in the general AI chat */
+.teacher-ai-math-inline,
+.teacher-ai-math-block {
+  font-family: "Cambria Math", "STIX Two Math", "Times New Roman", serif;
+  color: #f4efff;
+  letter-spacing: .01em;
+}
+.teacher-ai-math-inline {
+  display: inline-block;
+  padding: 0 3px;
+  white-space: normal;
+}
+.teacher-ai-math-block {
+  display: block;
+  max-width: 100%;
+  margin: 12px 0;
+  padding: 12px 16px;
+  overflow-x: auto;
+  border: 1px solid #393248;
+  border-radius: 11px;
+  background: #121019;
+  font-size: 1.08rem;
+  line-height: 1.9;
+  text-align: center;
+}
+.teacher-ai-math-inline sup,
+.teacher-ai-math-block sup {
+  position: relative;
+  top: -.12em;
+  margin-left: 1px;
+  font-size: .72em;
+  line-height: 0;
+  vertical-align: super;
+}
+.teacher-ai-math-inline sub,
+.teacher-ai-math-block sub {
+  position: relative;
+  bottom: -.08em;
+  margin-left: 1px;
+  font-size: .72em;
+  line-height: 0;
+  vertical-align: sub;
+}
+.teacher-ai-math-fraction {
+  display: inline-flex;
+  min-width: 1.2em;
+  flex-direction: column;
+  align-items: stretch;
+  margin: 0 3px;
+  vertical-align: middle;
+  text-align: center;
+  line-height: 1.25;
+}
+.teacher-ai-math-fraction > span:first-child {
+  padding: 0 4px 2px;
+  border-bottom: 1px solid currentColor;
+}
+.teacher-ai-math-fraction > span:last-child { padding: 2px 4px 0; }
+.teacher-ai-math-radicand {
+  display: inline-block;
+  padding: 0 3px;
+  border-top: 1px solid currentColor;
+}
+.teacher-ai-math-box {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}
+.teacher-ai-message-content code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #282432;
+  color: #e0d5ff;
+  font-size: .9em;
+}

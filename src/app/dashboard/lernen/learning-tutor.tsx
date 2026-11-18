@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 
 type GeneratedFile = { name: string; format: "md" | "txt" | "csv" | "html" | "json"; content: string };
 type ProposedAction =
@@ -26,6 +26,164 @@ const suggestions = [
 ];
 
 const weekdays = ["", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
+
+function readMathGroup(source: string, start: number): { value: string; next: number } {
+  let index = start;
+  while (/\s/.test(source[index] ?? "")) index++;
+  if (source[index] !== "{") {
+    return { value: source[index] ?? "", next: Math.min(index + 1, source.length) };
+  }
+
+  let depth = 0;
+  const valueStart = index + 1;
+  for (; index < source.length; index++) {
+    if (source[index] === "{") depth++;
+    if (source[index] === "}") {
+      depth--;
+      if (depth === 0) return { value: source.slice(valueStart, index), next: index + 1 };
+    }
+  }
+  return { value: source.slice(valueStart), next: source.length };
+}
+
+function renderMathExpression(source: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let plain = "";
+  let index = 0;
+  const flush = () => {
+    if (plain) {
+      nodes.push(plain);
+      plain = "";
+    }
+  };
+
+  while (index < source.length) {
+    const char = source[index];
+
+    if (char === "^" || char === "_") {
+      flush();
+      const group = readMathGroup(source, index + 1);
+      nodes.push(char === "^"
+        ? <sup key={"sup-" + index}>{renderMathExpression(group.value)}</sup>
+        : <sub key={"sub-" + index}>{renderMathExpression(group.value)}</sub>);
+      index = group.next;
+      continue;
+    }
+
+    if (char === "{") {
+      const group = readMathGroup(source, index);
+      flush();
+      nodes.push(<span key={"group-" + index}>{renderMathExpression(group.value)}</span>);
+      index = group.next;
+      continue;
+    }
+
+    if (char === "\\") {
+      if (source[index + 1] === "\\") {
+        plain += " ";
+        index += 2;
+        continue;
+      }
+      const commandMatch = source.slice(index + 1).match(/^[a-zA-Z]+|^[,;!]/);
+      if (!commandMatch) {
+        plain += source[index + 1] ?? "";
+        index += 2;
+        continue;
+      }
+      const command = commandMatch[0];
+      index += command.length + 1;
+      const symbols: Record<string, string> = {
+        cdot: "·", times: "×", div: "÷", pm: "±", le: "≤", leq: "≤",
+        ge: "≥", geq: "≥", neq: "≠", ne: "≠", approx: "≈", pi: "π",
+        sum: "∑", infty: "∞", rightarrow: "→", to: "→", percent: "%",
+        quad: "  ", qquad: "    ", ",": " ", ";": " ", "!": "",
+        alpha: "α", beta: "β", gamma: "γ", Delta: "Δ",
+      };
+
+      if (command === "frac") {
+        const numerator = readMathGroup(source, index);
+        const denominator = readMathGroup(source, numerator.next);
+        flush();
+        nodes.push(
+          <span className="teacher-ai-math-fraction" key={"frac-" + index}>
+            <span>{renderMathExpression(numerator.value)}</span>
+            <span>{renderMathExpression(denominator.value)}</span>
+          </span>
+        );
+        index = denominator.next;
+        continue;
+      }
+      if (command === "sqrt" || command === "boxed" || command === "text") {
+        const group = readMathGroup(source, index);
+        flush();
+        const rendered = renderMathExpression(group.value);
+        nodes.push(command === "sqrt"
+          ? <span key={"sqrt-" + index}>√<span className="teacher-ai-math-radicand">{rendered}</span></span>
+          : command === "boxed"
+            ? <span className="teacher-ai-math-box" key={"boxed-" + index}>{rendered}</span>
+            : <span key={"text-" + index}>{rendered}</span>);
+        index = group.next;
+        continue;
+      }
+      if (command === "left" || command === "right") continue;
+      if (symbols[command] !== undefined) {
+        plain += symbols[command];
+        continue;
+      }
+      plain += command;
+      continue;
+    }
+
+    if (char === "}") {
+      index++;
+      continue;
+    }
+
+    plain += char;
+    index++;
+  }
+
+  flush();
+  return nodes;
+}
+
+function renderTextSegment(source: string, keyPrefix: string): ReactNode[] {
+  const backtick = String.fromCharCode(96);
+  return source.split(/(\*\*[^*\n]+\*\*|\x60[^\x60\n]+\x60)/g).filter(Boolean).map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={keyPrefix + "-bold-" + index}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith(backtick) && part.endsWith(backtick)) {
+      return <code key={keyPrefix + "-code-" + index}>{part.slice(1, -1)}</code>;
+    }
+    return <React.Fragment key={keyPrefix + "-text-" + index}>{part}</React.Fragment>;
+  });
+}
+
+function renderChatContent(source: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const mathPattern = /\\\[([\s\S]+?)\\\]|\$\$([\s\S]+?)\$\$|\\\(([\s\S]+?)\\\)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = mathPattern.exec(source)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(...renderTextSegment(source.slice(lastIndex, match.index), "segment-" + key++));
+    }
+    const formula = match[1] ?? match[2] ?? match[3] ?? "";
+    const isDisplay = match[1] !== undefined || match[2] !== undefined;
+    nodes.push(isDisplay
+      ? <div className="teacher-ai-math-block" key={"math-block-" + key++}>{renderMathExpression(formula)}</div>
+      : <span className="teacher-ai-math-inline" key={"math-inline-" + key++}>{renderMathExpression(formula)}</span>);
+    lastIndex = mathPattern.lastIndex;
+  }
+
+  if (lastIndex < source.length) {
+    nodes.push(...renderTextSegment(source.slice(lastIndex), "segment-" + key));
+  }
+  return nodes.length ? nodes : [source];
+}
 
 function titleFromMessage(message: string) {
   const cleaned = message.replace(/\s+/g, " ").trim();
@@ -208,7 +366,7 @@ export function LearningTutor({ userRole }: { userRole: string }) {
             {message.role === "assistant" && <span className="teacher-ai-message-avatar" aria-hidden="true">S</span>}
             <div className="teacher-ai-message-body">
               {message.role === "user" && <small>Du</small>}
-              <div className="teacher-ai-message-content">{message.content}</div>
+              <div className="teacher-ai-message-content">{renderChatContent(message.content)}</div>
               {message.files && message.files.length > 0 && <div className="ai-generated-files">
                 <strong>Erstellte Dateien</strong>
                 {message.files.map((file, fileIndex) => (
