@@ -84,16 +84,15 @@ export async function POST(request: Request) {
     const userSave = await supabase.from("teacher_ai_messages").insert({
       chat_id: chat.id, school_id: chat.school_id, teacher_id: user.id,
       role: "user", content: parsed.data.message,
-    });
-    if (userSave.error) return NextResponse.json({ error: "Die Nachricht konnte nicht gespeichert werden." }, { status: 500 });
+    }).select("id").single();
+    if (userSave.error || !userSave.data) return NextResponse.json({ error: "Die Nachricht konnte nicht gespeichert werden." }, { status: 500 });
 
     const assistantSave = await supabase.from("teacher_ai_messages").insert({
       chat_id: chat.id, school_id: chat.school_id, teacher_id: user.id,
       role: "assistant", content: result.text,
     });
     if (assistantSave.error) {
-      await supabase.from("teacher_ai_messages").delete()
-        .eq("chat_id", chat.id).eq("teacher_id", user.id).eq("role", "user").eq("content", parsed.data.message);
+      await supabase.from("teacher_ai_messages").delete().eq("id", userSave.data.id);
       return NextResponse.json({ error: "Die KI-Antwort kam zurück, konnte aber nicht im Chat gespeichert werden." }, { status: 500 });
     }
 
