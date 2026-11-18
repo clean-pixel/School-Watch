@@ -310,3 +310,89 @@ code { max-width: 100%; overflow-wrap: anywhere; color: #d8c9ff; }
   .sidebar-group-title { flex: 0 0 112px; margin: 0 6px 0 0; }
   .sidebar-group a { flex: 0 0 auto; white-space: nowrap; }
 }
+
+
+/* Teacher AI workspace */
+.teacher-ai-page, .classbook-page { padding-bottom: 70px; }
+.teacher-ai-shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 680px; margin-top: 26px; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 20px; background: rgba(14, 12, 21, .95); box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+.teacher-ai-sidebar { min-width: 0; padding: 16px 12px; border-right: 1px solid var(--border); background: #100e18; }
+.teacher-ai-sidebar-head { display: flex; flex-direction: column; gap: 12px; padding: 4px 6px 16px; border-bottom: 1px solid var(--border); }
+.teacher-ai-sidebar-head strong, .teacher-ai-sidebar-head small { display: block; }
+.teacher-ai-sidebar-head small { margin-top: 4px; color: var(--muted); font-size: .78rem; }
+.button.compact { min-height: 36px; padding: 7px 10px; font-size: .82rem; }
+.teacher-ai-chat-link { display: flex; width: 100%; align-items: center; gap: 9px; margin-top: 6px; padding: 10px 8px; border: 1px solid transparent; border-radius: 11px; background: transparent; color: var(--white); text-align: left; cursor: pointer; }
+.teacher-ai-chat-link:hover, .teacher-ai-chat-link.active { border-color: var(--border-strong); background: #211c31; }
+.teacher-ai-chat-symbol, .teacher-ai-message-avatar { display: grid; flex: 0 0 32px; width: 32px; height: 32px; place-items: center; border-radius: 10px; background: linear-gradient(145deg, #b69aff, #7c4fe4); color: #fff; font-weight: 850; }
+.teacher-ai-chat-label { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.teacher-ai-chat-label strong { overflow: hidden; font-size: .88rem; text-overflow: ellipsis; white-space: nowrap; }
+.teacher-ai-chat-label small { overflow: hidden; color: var(--muted); font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.teacher-ai-default { color: #bba8ff; font-size: .65rem; }
+.teacher-ai-conversation { display: flex; min-width: 0; min-height: 680px; flex-direction: column; }
+.teacher-ai-conversation-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 20px; border-bottom: 1px solid var(--border); }
+.teacher-ai-conversation-head > div { display: flex; flex-direction: column; gap: 4px; }
+.teacher-ai-conversation-head span { color: var(--muted); font-size: .78rem; }
+.teacher-ai-ready { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.teacher-ai-ready i { width: 7px; height: 7px; border-radius: 50%; background: #6bd6a1; }
+.teacher-ai-messages { min-height: 430px; max-height: 66vh; flex: 1; overflow-y: auto; padding: 22px clamp(12px, 3vw, 34px); }
+.teacher-ai-empty { width: min(600px, 100%); margin: 45px auto; text-align: center; }
+.teacher-ai-empty h2 { margin: 0 0 8px; font-size: 1.45rem; }
+.teacher-ai-prompts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 22px; }
+.teacher-ai-prompts button { display: flex; justify-content: space-between; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: #171422; color: var(--white); cursor: pointer; text-align: left; }
+.teacher-ai-prompts button:hover { border-color: var(--purple); }
+.teacher-ai-message { display: flex; align-items: flex-start; gap: 9px; margin: 16px 0; }
+.teacher-ai-message.user { justify-content: flex-end; }
+.teacher-ai-message-avatar { flex-basis: 30px; width: 30px; height: 30px; }
+.teacher-ai-bubble { max-width: min(760px, 90%); padding: 13px 15px; border: 1px solid var(--border); border-radius: 15px; background: #171422; }
+.teacher-ai-message.user .teacher-ai-bubble { border-color: rgba(167,139,250,.35); background: rgba(139,92,246,.16); }
+.teacher-ai-bubble > small { display: block; margin-bottom: 7px; color: var(--purple); font-size: .75rem; font-weight: 800; }
+.teacher-ai-message-content { color: var(--white); font-size: .94rem; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.teacher-ai-typing { color: var(--muted); }
+.teacher-ai-composer { display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; align-items: end; gap: 8px; margin: 0 14px; padding: 9px; border: 1px solid var(--border-strong); border-radius: 14px; background: #0c0a13; }
+.teacher-ai-composer select { min-height: 48px; padding: 9px; }
+.teacher-ai-composer textarea { min-height: 48px; max-height: 170px; border: 0; background: transparent; box-shadow: none; }
+.teacher-ai-composer textarea:focus { border: 0; box-shadow: none; }
+.teacher-ai-composer .button { min-height: 48px; }
+.teacher-ai-save-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 0 14px 12px; padding: 12px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--purple-soft); }
+.teacher-ai-save-row label { display: flex; align-items: center; gap: 8px; font-size: .85rem; }
+.teacher-ai-save-row span { width: 100%; color: var(--muted); font-size: .75rem; }
+.teacher-ai-notice { margin: 0 14px 10px; }
+.teacher-ai-footnote, .ai-privacy-note { margin: 10px 18px 16px; text-align: center; font-size: .76rem; }
+.ai-privacy-note { margin: 17px 0; }
+.classbook-layout { display: grid; gap: 18px; margin-top: 24px; }
+.classbook-class-picker { display: flex; align-items: end; gap: 12px; }
+.classbook-class-picker .field { flex: 1; margin: 0; }
+.classbook-form-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.classbook-form-heading h2, .classbook-form-heading h3 { margin: 4px 0 0; }
+.classbook-form-heading p { margin: 5px 0; font-size: .82rem; }
+.classbook-count { padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .78rem; white-space: nowrap; }
+.classbook-attendance { margin: 20px 0; padding-top: 18px; border-top: 1px solid var(--border); }
+.classbook-roster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.classbook-student { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 11px; background: #100e18; }
+.classbook-student span { overflow: hidden; font-size: .85rem; text-overflow: ellipsis; white-space: nowrap; }
+.classbook-student select { max-width: 145px; padding: 8px; font-size: .78rem; }
+.classbook-history { display: grid; gap: 13px; }
+.classbook-history > .classbook-form-heading { margin-bottom: 0; }
+.classbook-entry h3 { margin: 12px 0 8px; }
+.classbook-entry p { white-space: pre-wrap; }
+.classbook-entry-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; color: var(--purple); font-size: .8rem; font-weight: 750; }
+.classbook-homework, .classbook-notes { margin-top: 12px; padding: 12px; border-radius: 11px; background: #100e18; }
+.classbook-homework p, .classbook-notes p { margin: 5px 0 0; }
+.classbook-notes { border: 1px dashed var(--border-strong); }
+.classbook-attendance-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.classbook-attendance-summary span { padding: 5px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .72rem; }
+@media (max-width: 900px) {
+  .teacher-ai-shell { grid-template-columns: 1fr; }
+  .teacher-ai-sidebar { max-height: 190px; overflow-y: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  .teacher-ai-sidebar-head { flex-direction: row; align-items: center; justify-content: space-between; }
+  .teacher-ai-chat-link { display: inline-flex; width: auto; min-width: 205px; margin-right: 5px; }
+  .teacher-ai-conversation, .teacher-ai-shell { min-height: auto; }
+  .teacher-ai-messages { min-height: 360px; }
+}
+@media (max-width: 600px) {
+  .teacher-ai-composer { grid-template-columns: 1fr; margin: 0 9px; }
+  .teacher-ai-prompts, .classbook-roster { grid-template-columns: 1fr; }
+  .classbook-class-picker { align-items: stretch; flex-direction: column; }
+  .classbook-class-picker .button { width: 100%; }
+  .classbook-student select { max-width: 48%; }
+  .classbook-form-heading { align-items: flex-start; }
+}
