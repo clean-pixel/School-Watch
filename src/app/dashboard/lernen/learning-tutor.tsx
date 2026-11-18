@@ -73,7 +73,7 @@ function renderMathExpression(source: string): ReactNode[] {
     if (char === "{") {
       const group = readMathGroup(source, index);
       flush();
-      nodes.push(<React.Fragment key={"group-" + index}>{renderMathExpression(group.value)}</React.Fragment>);
+      nodes.push(<span key={"group-" + index}>{renderMathExpression(group.value)}</span>);
       index = group.next;
       continue;
     }
