@@ -74,9 +74,9 @@ export default async function TeacherAiPage() {
       <Link className="brand" href="/dashboard"><span className="brand-mark">S</span> SchulWatch One</Link>
       <Link href="/dashboard">← Übersicht</Link>
     </header>
-    <div className="eyebrow">Unterrichts-Copilot</div>
+    <div className="eyebrow">Dein KI-Assistent für den Schulalltag</div>
     <h1 style={{ fontSize: "2.7rem" }}>Lehrer-KI</h1>
-    <p>Ein eigener Chat für jedes Fach und jede Klasse, in der du eingetragen bist. Plane Unterricht, entwickle Arbeitsblätter, erstelle Lernzielkontrollen und überarbeite deine Materialien.</p>
+    <p>Ein freier Chat wie ChatGPT – mit dem passenden Fach- und Klassenkontext. Stelle ganz normale Fragen, lass dir Dinge erklären, entwickle Ideen oder nutze bei Bedarf Werkzeuge für Arbeitsblätter und Unterrichtsplanung.</p>
     {assignmentError && <div className="notice" role="alert">Deine Fachzuordnungen konnten nicht geladen werden. Bitte prüfe deine Verbindung.</div>}
     {chats.length === 0 ? <section className="card">
       <h2>Noch keine Fach-Chats</h2>
