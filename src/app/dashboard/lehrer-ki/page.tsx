@@ -81,7 +81,7 @@ export default async function TeacherAiPage() {
     {chats.length === 0 ? <section className="card">
       <h2>Noch keine Fach-Chats</h2>
       <p>Sobald die Schulleitung dich einer Klasse und einem Fach zugeordnet hat, werden hier automatisch passende Chats angelegt. Du musst nichts manuell einrichten.</p>
-      <Link className="button secondary" href="/dashboard/teachers">Zu den Lehrkraft-Zuordnungen</Link>
+      <p>Bitte die Schulleitung, dich einer Klasse und einem Fach zuzuordnen. Danach erscheinen die Fach-Chats hier automatisch.</p>
     </section> : <TeacherAiChat initialChats={chats} />}
     <p className="ai-privacy-note">Bitte gib keine Schülernamen, Gesundheitsdaten, Notenlisten mit Klarnamen oder sonstigen vertraulichen Angaben in die KI ein. Prüfe alle KI-Entwürfe vor dem Einsatz.</p>
   </main>;
