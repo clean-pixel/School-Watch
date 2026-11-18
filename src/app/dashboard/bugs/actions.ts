@@ -27,11 +27,11 @@ export async function submitBugReport(formData: FormData) {
   if (!user) redirect("/anmelden");
 
   const { data: profile } = await supabase.from("profiles")
-    .select("registration_status")
+    .select("registration_status,role")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!profile || profile.registration_status !== "approved") {
+  if (!profile || (profile.role !== "platform_admin" && profile.registration_status !== "approved")) {
     redirect("/dashboard?fehler=keine-berechtigung");
   }
 
