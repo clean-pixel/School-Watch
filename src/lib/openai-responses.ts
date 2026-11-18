@@ -11,6 +11,13 @@ type RunOptions = {
   maxOutputTokens?: number;
 };
 
+type OpenAIErrorPayload = {
+  message?: string;
+  type?: string;
+  code?: string | null;
+  param?: string | null;
+};
+
 export class AiConfigurationError extends Error {
   constructor(message: string) {
     super(message);
@@ -18,12 +25,27 @@ export class AiConfigurationError extends Error {
   }
 }
 
+function safeProviderMessage(message?: string) {
+  return (message ?? "")
+    .replace(/sk-[A-Za-z0-9_-]{6,}/g, "[API-Schlüssel verborgen]")
+    .replace(/Bearer\s+\S+/gi, "Bearer [verborgen]")
+    .replace(/\s+/g, " ")
+    .slice(0, 320);
+}
+
 export async function runOpenAIResponse({ input, useWebSearch = false, maxOutputTokens = 1800 }: RunOptions) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  // Be forgiving about accidental whitespace, line breaks, quotes or a pasted "Bearer " prefix.
+  const apiKey = (process.env.OPENAI_API_KEY ?? "")
+    .trim()
+    .replace(/^Bearer\s+/i, "")
+    .replace(/^(['"])(.*)\1$/, "$2")
+    .replace(/\s+/g, "");
+
   if (!apiKey) {
-    throw new AiConfigurationError("Die KI ist noch nicht verbunden. Hinterlege OPENAI_API_KEY in deiner lokalen .env.local und später auch in Vercel.");
+    throw new AiConfigurationError("Die KI ist noch nicht verbunden. Hinterlege OPENAI_API_KEY in Vercel.");
   }
 
+  const model = process.env.OPENAI_MODEL?.trim() || "gpt-6-luna";
   const tools = useWebSearch ? [{ type: "web_search", search_context_size: "low" }] : undefined;
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -32,7 +54,7 @@ export async function runOpenAIResponse({ input, useWebSearch = false, maxOutput
       Authorization: "Bearer " + apiKey,
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-6-luna",
+      model,
       input,
       ...(tools ? { tools, tool_choice: "auto" } : {}),
       max_output_tokens: maxOutputTokens,
@@ -43,20 +65,52 @@ export async function runOpenAIResponse({ input, useWebSearch = false, maxOutput
   const payload = await response.json().catch(() => ({})) as {
     output_text?: string;
     output?: Array<{ content?: Array<{ type?: string; text?: string; annotations?: Array<{ type?: string; title?: string; url?: string }> }> }>;
-    error?: { message?: string };
+    error?: OpenAIErrorPayload;
   };
 
   if (!response.ok) {
+    const providerError = payload.error;
+    const providerCode = typeof providerError?.code === "string" ? providerError.code : "";
+    const providerType = typeof providerError?.type === "string" ? providerError.type : "";
+    const providerMessage = safeProviderMessage(providerError?.message);
+    const requestId = response.headers.get("x-request-id");
+    const keyFormat = apiKey.startsWith("sk-proj-") ? "project-key" : apiKey.startsWith("sk-") ? "sk-key" : "unknown-format";
+
+    // Never log the key or raw provider payload. The request ID and sanitized error are enough to debug.
+    console.error("[SchulWatch OpenAI] Responses API error", {
+      status: response.status,
+      code: providerCode || null,
+      type: providerType || null,
+      requestId,
+      model,
+      keyFormat,
+      message: providerMessage || null,
+    });
+
+    const codeHint = providerCode ? "Code: " + providerCode + ". " : "";
     if (response.status === 401) {
-      throw new AiConfigurationError("Der OpenAI-API-Schlüssel ist ungültig, abgelaufen oder wurde widerrufen. Ersetze OPENAI_API_KEY in Vercel durch einen gültigen Projekt-API-Schlüssel und stelle danach neu bereit.");
+      throw new AiConfigurationError(
+        "OpenAI hat die Authentifizierung abgelehnt. " + codeHint +
+        (providerMessage || "Prüfe, ob OPENAI_API_KEY ein aktiver API-Schlüssel aus dem richtigen OpenAI-Projekt ist.")
+      );
     }
     if (response.status === 403) {
-      throw new AiConfigurationError("Der OpenAI-API-Schlüssel hat keine Berechtigung für diese Anfrage. Prüfe die Schlüsselrechte und den API-Projektzugang.");
+      throw new AiConfigurationError(
+        "OpenAI hat den Zugriff verweigert. " + codeHint +
+        (providerMessage || "Prüfe die Berechtigungen des API-Projekts.")
+      );
     }
     if (response.status === 429) {
-      throw new Error("Das OpenAI-Nutzungslimit wurde erreicht. Prüfe das API-Nutzungslimit und versuche es später erneut.");
+      if (providerCode === "insufficient_quota") {
+        throw new Error("Das API-Nutzungskontingent ist aufgebraucht. Prüfe das Abrechnungskonto des OpenAI-API-Projekts.");
+      }
+      throw new Error("OpenAI begrenzt die Anfrage gerade. " + codeHint +
+        (providerMessage || "Bitte versuche es gleich erneut."));
     }
-    throw new Error("OpenAI-Anfrage fehlgeschlagen (HTTP " + response.status + ").");
+    throw new Error(
+      "OpenAI-Anfrage fehlgeschlagen (HTTP " + response.status + "). " + codeHint +
+      (providerMessage || "Die genaue Ursache steht in den Vercel-Funktionslogs.")
+    );
   }
 
   const content = (payload.output ?? []).flatMap((item) => item.content ?? []);
