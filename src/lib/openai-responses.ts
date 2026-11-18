@@ -9,6 +9,7 @@ type RunOptions = {
   input: string | OpenAIInputMessage[];
   useWebSearch?: boolean;
   maxOutputTokens?: number;
+  jsonMode?: boolean;
 };
 
 type OpenAIErrorPayload = {
@@ -33,8 +34,7 @@ function safeProviderMessage(message?: string) {
     .slice(0, 320);
 }
 
-export async function runOpenAIResponse({ input, useWebSearch = false, maxOutputTokens = 1800 }: RunOptions) {
-  // Be forgiving about accidental whitespace, line breaks, quotes or a pasted "Bearer " prefix.
+export async function runOpenAIResponse({ input, useWebSearch = false, maxOutputTokens = 1800, jsonMode = false }: RunOptions) {
   const apiKey = (process.env.OPENAI_API_KEY ?? "")
     .trim()
     .replace(/^Bearer\s+/i, "")
@@ -57,6 +57,7 @@ export async function runOpenAIResponse({ input, useWebSearch = false, maxOutput
       model,
       input,
       ...(tools ? { tools, tool_choice: "auto" } : {}),
+      ...(jsonMode ? { text: { format: { type: "json_object" } } } : {}),
       max_output_tokens: maxOutputTokens,
     }),
     cache: "no-store",
@@ -76,7 +77,6 @@ export async function runOpenAIResponse({ input, useWebSearch = false, maxOutput
     const requestId = response.headers.get("x-request-id");
     const keyFormat = apiKey.startsWith("sk-proj-") ? "project-key" : apiKey.startsWith("sk-") ? "sk-key" : "unknown-format";
 
-    // Never log the key or raw provider payload. The request ID and sanitized error are enough to debug.
     console.error("[SchulWatch OpenAI] Responses API error", {
       status: response.status,
       code: providerCode || null,
