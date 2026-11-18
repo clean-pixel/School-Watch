@@ -165,19 +165,20 @@ export async function POST(request: Request) {
         }
         const classResult = await supabase.from("classes").select("id")
           .eq("school_id", profile.school_id).eq("name", action.className).maybeSingle();
+        const classId = classResult.data?.id;
         const teacherResult = await supabase.from("teachers").select("id,subjects")
           .eq("school_id", profile.school_id).eq("id", action.teacherId).maybeSingle();
-        const subjectResult = classResult.data
+        const subjectResult = classId
           ? await supabase.from("class_subjects").select("class_id")
-              .eq("school_id", profile.school_id).eq("class_id", classResult.data.id).eq("subject", action.subject).maybeSingle()
+              .eq("school_id", profile.school_id).eq("class_id", classId).eq("subject", action.subject).maybeSingle()
           : { data: null, error: null };
-        if (classResult.error || !classResult.data || teacherResult.error || !teacherResult.data ||
+        if (classResult.error || !classId || teacherResult.error || !teacherResult.data ||
             subjectResult.error || !subjectResult.data || !(teacherResult.data.subjects ?? []).includes(action.subject)) {
           results.push("Zuordnung " + action.className + " / " + action.subject + ": Klasse, Fach oder Lehrkraft passt nicht zu den Schulzuordnungen.");
           continue;
         }
         const existing = await supabase.from("teacher_assignments").select("id")
-          .eq("school_id", profile.school_id).eq("class_id", classResult.data.id)
+          .eq("school_id", profile.school_id).eq("class_id", classId)
           .eq("teacher_id", action.teacherId).eq("subject", action.subject).maybeSingle();
         if (existing.error) {
           results.push("Zuordnung " + action.className + " / " + action.subject + ": konnte nicht geprüft werden.");
@@ -185,7 +186,7 @@ export async function POST(request: Request) {
         }
         if (!existing.data) {
           const inserted = await supabase.from("teacher_assignments").insert({
-            school_id: profile.school_id, class_id: classResult.data.id,
+            school_id: profile.school_id, class_id: classId,
             teacher_id: action.teacherId, subject: action.subject,
           });
           if (inserted.error) {
@@ -201,13 +202,14 @@ export async function POST(request: Request) {
       if (action.type === "create_timetable") {
         const classResult = await supabase.from("classes").select("id")
           .eq("school_id", profile.school_id).eq("name", action.className).maybeSingle();
-        if (classResult.error || !classResult.data) {
+        const classId = classResult.data?.id;
+        if (classResult.error || !classId) {
           results.push("Stundenplan " + action.className + ": Klasse nicht gefunden.");
           continue;
         }
 
         let timetableResult = await supabase.from("timetables").select("id")
-          .eq("school_id", profile.school_id).eq("class_id", classResult.data.id)
+          .eq("school_id", profile.school_id).eq("class_id", classId)
           .order("created_at").limit(1).maybeSingle();
         if (timetableResult.error) {
           results.push("Stundenplan " + action.className + ": konnte nicht geladen werden.");
@@ -216,7 +218,7 @@ export async function POST(request: Request) {
         let timetableId = timetableResult.data?.id as string | undefined;
         if (!timetableId) {
           const created = await supabase.from("timetables").insert({
-            school_id: profile.school_id, class_id: classResult.data.id, name: "Stundenplan",
+            school_id: profile.school_id, class_id: classId, name: "Stundenplan",
           }).select("id").single();
           if (created.error || !created.data) {
             results.push("Stundenplan " + action.className + ": konnte nicht angelegt werden.");
@@ -229,11 +231,11 @@ export async function POST(request: Request) {
         for (const entry of action.entries) {
           const [subjectResult, assignmentResult] = await Promise.all([
             supabase.from("class_subjects").select("class_id")
-              .eq("school_id", profile.school_id).eq("class_id", classResult.data.id)
+              .eq("school_id", profile.school_id).eq("class_id", classId)
               .eq("subject", entry.subject).maybeSingle(),
             (() => {
               let query = supabase.from("teacher_assignments").select("teacher_id")
-                .eq("school_id", profile.school_id).eq("class_id", classResult.data.id)
+                .eq("school_id", profile.school_id).eq("class_id", classId)
                 .eq("subject", entry.subject);
               if (profile.role === "teacher") query = query.eq("teacher_id", user.id);
               return query.limit(2);
