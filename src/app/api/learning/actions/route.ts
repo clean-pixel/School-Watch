@@ -132,12 +132,13 @@ export async function POST(request: Request) {
         }
         const classResult = await supabase.from("classes").select("id")
           .eq("school_id", profile.school_id).eq("name", action.className).maybeSingle();
-        if (classResult.error || !classResult.data) {
+        const classId = classResult.data?.id;
+        if (classResult.error || !classId) {
           results.push("Fächer für " + action.className + ": Klasse nicht gefunden.");
           continue;
         }
         const existing = await supabase.from("class_subjects").select("subject")
-          .eq("school_id", profile.school_id).eq("class_id", classResult.data.id);
+          .eq("school_id", profile.school_id).eq("class_id", classId);
         if (existing.error) {
           results.push("Fächer für " + action.className + ": vorhandene Fächer konnten nicht geprüft werden.");
           continue;
@@ -146,7 +147,7 @@ export async function POST(request: Request) {
         const missing = [...new Set(action.subjects)].filter((subject) => !known.has(subject));
         if (missing.length) {
           const inserted = await supabase.from("class_subjects").insert(missing.map((subject) => ({
-            school_id: profile.school_id, class_id: classResult.data.id, subject,
+            school_id: profile.school_id, class_id: classId, subject,
           })));
           if (inserted.error) {
             results.push("Fächer für " + action.className + ": Speichern fehlgeschlagen.");
