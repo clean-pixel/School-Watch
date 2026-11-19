@@ -409,7 +409,7 @@ export function LearningTutor({ userRole }: { userRole: string }) {
       .teacher-ai-tool,.teacher-ai-speak{border:1px solid var(--border);background:transparent;color:var(--white);border-radius:10px;padding:8px 11px;cursor:pointer;font:inherit;font-size:.85rem}
       .teacher-ai-tool.active{border-color:var(--purple);color:var(--purple)}
       .teacher-ai-tool:disabled{opacity:.5;cursor:not-allowed}
-      .teacher-ai-speak{margin-top:9px}
+      .teacher-ai-speak{margin-top:9px}\n      .teacher-ai-next-step a{color:var(--purple);font-weight:700;text-decoration:none}
       @media(max-width:600px){.teacher-ai-enter-hint{display:none}.teacher-ai-composer-tools{gap:8px;flex-wrap:wrap}}
     `}</style>
     <aside className="teacher-ai-sidebar">
@@ -495,6 +495,9 @@ export function LearningTutor({ userRole }: { userRole: string }) {
                 {!canApplyActions && <small>Diese Änderungen können nur von der Schulleitung oder einer berechtigten Lehrkraft übernommen werden.</small>}
               </div>}
               {message.actionResult && <div className="notice" role="status">{message.actionResult}</div>}
+              {message.actionResult && userRole === "school_admin" && message.actions?.some((action) => action.type === "create_class") && <p className="teacher-ai-next-step">
+                <a href="/dashboard/schule-setup">Weiter mit Fächern, Lehrkräften und Schulstundenplan →</a>
+              </p>}
             </div>
           </article>
         ))}
