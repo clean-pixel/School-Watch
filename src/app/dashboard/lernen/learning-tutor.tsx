@@ -443,7 +443,7 @@ export function LearningTutor({ userRole }: { userRole: string }) {
       setRecording(true);
       recordingTimerRef.current = window.setTimeout(() => {
         if (recorder.state === "recording") recorder.stop();
-      }, 60000);
+      }, 30000);
     } catch (cause) {
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
@@ -581,7 +581,7 @@ export function LearningTutor({ userRole }: { userRole: string }) {
             <button type="button" className={"teacher-ai-tool-button" + (recording ? " recording" : "")} onClick={() => void toggleRecording()} disabled={busy || transcribing || uploadingImages}>
               {recording ? "Aufnahme beenden" : transcribing ? "Sprache wird erkannt …" : "🎙 Sprechen"}
             </button>
-            {recording && <span className="teacher-ai-recording-status">Aufnahme läuft · max. 60 Sekunden</span>}
+            {recording && <span className="teacher-ai-recording-status">Aufnahme läuft · max. 30 Sekunden</span>}
           </div>
           {selectedImages.length > 0 && <div className="teacher-ai-upload-previews">
             {selectedImages.map((image, index) => <div className="teacher-ai-upload-preview" key={image.path}>
