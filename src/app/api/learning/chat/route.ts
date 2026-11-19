@@ -51,9 +51,12 @@ const outputSchema = z.object({
   files: z.array(fileSchema).max(4).default([]),
   actions: z.array(actionSchema).max(20).default([]),
 });
+const imagePathSchema = z.string().trim().min(1).max(220)
+  .regex(/^[0-9a-f-]{36}\/[A-Za-z0-9._-]+$/i, "Ungültiger Bildpfad.");
 const messageSchema = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.string().trim().min(1).max(20000),
+  images: z.array(imagePathSchema).max(3).optional(),
 });
 const requestSchema = z.object({
   messages: z.array(messageSchema).min(1).max(12),
@@ -66,6 +69,11 @@ const requestSchema = z.object({
   if (value.messages[value.messages.length - 1]?.role !== "user") {
     context.addIssue({ code: "custom", path: ["messages"], message: "Die letzte Nachricht muss von dir stammen." });
   }
+  value.messages.forEach((message, index) => {
+    if (message.images?.length && (message.role !== "user" || index !== value.messages.length - 1)) {
+      context.addIssue({ code: "custom", path: ["messages", index, "images"], message: "Bilder dürfen nur an die aktuelle Nachricht angehängt werden." });
+    }
+  });
 });
 
 const roleInstructions: Record<string, string[]> = {
@@ -183,9 +191,47 @@ export async function POST(request: Request) {
 
     const input: OpenAIInputMessage[] = [
       { role: "developer", content: systemText },
-      ...parsed.data.messages,
+      ...parsed.data.messages.map((message) => {
+        const paths = message.images ?? [];
+        if (!paths.length) return { role: message.role, content: message.content };
+        const imagePaths = paths.map((path) => path.trim());
+        if (imagePaths.some((path) => !path.startsWith(user.id + "/"))) {
+          throw new Error("Ein Bild gehört nicht zu deinem Konto.");
+        }
+        return { role: message.role, content: [
+          { type: "input_text" as const, text: message.content },
+          ...imagePaths.map((path) => ({ type: "input_image" as const, image_url: path, detail: "high" as const })),
+        ] };
+      }),
     ];
-    const result = await runOpenAIResponse({ input, maxOutputTokens: 3400, jsonMode: true });
+    const imagePaths = parsed.data.messages.at(-1)?.images ?? [];
+    if (imagePaths.length) {
+      const signedImages = await Promise.all(imagePaths.map((path) =>
+        supabase.storage.from("ai-chat-uploads").createSignedUrl(path, 300)
+      ));
+      const signedUrls = signedImages.map((result) => {
+        if (result.error || !result.data?.signedUrl) {
+          throw new Error("Ein hochgeladenes Bild konnte nicht geöffnet werden. Bitte lade es erneut hoch.");
+        }
+        return result.data.signedUrl;
+      });
+      const currentMessage = input[input.length - 1];
+      if (Array.isArray(currentMessage.content)) {
+        currentMessage.content = [
+          currentMessage.content[0],
+          ...signedUrls.map((url) => ({ type: "input_image" as const, image_url: url, detail: "high" as const })),
+        ];
+      }
+    }
+    let result: Awaited<ReturnType<typeof runOpenAIResponse>>;
+    try {
+      result = await runOpenAIResponse({ input, maxOutputTokens: 3400, jsonMode: true });
+    } finally {
+      if (imagePaths.length) {
+        const removed = await supabase.storage.from("ai-chat-uploads").remove(imagePaths);
+        if (removed.error) console.error("[SchulWatch AI] Temporary image cleanup failed:", removed.error.message);
+      }
+    }
 
     let rawOutput: unknown;
     try {
