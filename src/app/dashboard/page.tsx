@@ -142,6 +142,12 @@ export default async function Dashboard() {
       <section>
         <div className="eyebrow">Dein persönlicher Bereich</div>
         <h1 style={{ fontSize: "2.6rem" }}>Willkommen{profile.display_name ? `, ${profile.display_name}` : ""}</h1>
+        {schoolAdmin && profile.school_id && (classCount ?? 0) === 0 && <article className="card" style={{ margin: "20px 0", borderColor: "var(--border-strong)" }}>
+          <div className="eyebrow">Dein erster Schulstart</div>
+          <h2 style={{ fontSize: "1.55rem" }}>Lass uns deine Schule gemeinsam einrichten.</h2>
+          <p>Der SchulWatch-Assistent fragt dich nach Jahrgangsstufen, Parallelklassen und Buchstaben wie A, B, C und D. Danach führt er dich durch Fächer, Lehrkräfte und Stundenpläne.</p>
+          <Link className="button" href="/dashboard/schule-setup">KI-Schulstart jetzt beginnen →</Link>
+        </article>}
         {school && <article className="card"><div className="eyebrow">Deine Schule</div><h2 style={{ fontSize: "1.7rem" }}>{school.name}</h2><p>{school.school_type} · {school.city}</p><p>Schul-ID: <code>{school.id}</code></p>{schoolAdmin && <p>Du bist als Schulleitung angemeldet und kannst hier Klassen, Stundenpläne und Schulbereiche verwalten.</p>}</article>}
         {!profile.school_id && <div className="notice">Dein Konto ist noch keiner Schule zugeordnet.</div>}
         {schoolAdmin && <div className="grid"><article className="card"><h3>Klassen</h3><div className="stat">{classCount ?? 0}</div></article><article className="card"><h3>Lehrkräfte</h3><div className="stat">{teacherCount ?? 0}</div></article><article className="card"><h3>Schüler</h3><div className="stat">{studentCount ?? 0}</div></article></div>}
