@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 type GeneratedFile = { name: string; format: "md" | "txt" | "csv" | "html" | "json"; content: string };
 type ProposedAction =
   | { type: "create_class"; name: string; grade?: string | null; subjects: string[] }
   | { type: "add_subjects"; className: string; subjects: string[] }
   | { type: "assign_teacher"; className: string; subject: string; teacherId: string }
-  | { type: "create_timetable"; className: string; entries: Array<{ weekday: number; startsAt: string; endsAt: string; subject: string; room?: string | null; weekType: "both" | "A" | "B" }> };
+  | { type: "create_timetable"; className: string; entries: Array<{ weekday: number; startsAt: string; endsAt: string; subject: string; room?: string | null; weekType: "both" | "A" | "B" }> }
+  | { type: "update_school_hours"; dayStart: string; dayEnd: string };
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -227,10 +228,21 @@ function actionDescription(action: ProposedAction) {
   if (action.type === "add_subjects") return "Fächer für " + action.className + " ergänzen: " + action.subjects.join(", ");
   if (action.type === "assign_teacher") return "Lehrkraft einem Fach zuordnen: " + action.className + " · " + action.subject;
   if (action.type === "create_timetable") return "Stundenplan für " + action.className + " · " + action.entries.length + " Stunden";
+  if (action.type === "update_school_hours") return "Schulzeiten: " + action.dayStart + "–" + action.dayEnd + " Uhr";
   return "Schuländerung";
 }
 
-export function LearningTutor({ userRole }: { userRole: string }) {
+export function LearningTutor({
+  userRole,
+  initialPrompt,
+  initialTitle = "Schule einrichten",
+  onboardingMode = false,
+}: {
+  userRole: string;
+  initialPrompt?: string;
+  initialTitle?: string;
+  onboardingMode?: boolean;
+}) {
   const [chats, setChats] = useState<ChatSession[]>([{ id: "start", title: "Neuer Chat", messages: [] }]);
   const [activeChatId, setActiveChatId] = useState("start");
   const [input, setInput] = useState("");
@@ -243,9 +255,52 @@ export function LearningTutor({ userRole }: { userRole: string }) {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const initializationStarted = useRef(false);
   const activeChat = useMemo(() => chats.find((chat) => chat.id === activeChatId) ?? chats[0], [chats, activeChatId]);
   const isStudent = userRole === "student";
   const canApplyActions = userRole === "teacher" || userRole === "school_admin";
+
+  useEffect(() => {
+    if (!initialPrompt || initializationStarted.current) return;
+    initializationStarted.current = true;
+
+    const chatId = "school-onboarding";
+    const firstMessage: ChatMessage = { role: "user", content: initialPrompt };
+    setChats([{ id: chatId, title: initialTitle, messages: [firstMessage] }]);
+    setActiveChatId(chatId);
+    setError("");
+    setBusy(true);
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/learning/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...(onboardingMode ? { mode: "school_onboarding" } : {}),
+            messages: [{ role: "user", content: initialPrompt }],
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Die KI-Einrichtung konnte nicht gestartet werden.");
+        setChats((current) => current.map((chat) => chat.id === chatId
+          ? {
+              ...chat,
+              messages: [...chat.messages, {
+                role: "assistant",
+                content: String(payload.answer ?? "Ich konnte die erste Einrichtungsfrage nicht erstellen."),
+                files: Array.isArray(payload.files) ? payload.files : [],
+                actions: Array.isArray(payload.actions) ? payload.actions : [],
+              }],
+            }
+          : chat));
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Die KI-Einrichtung konnte nicht gestartet werden.");
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [initialPrompt, initialTitle, onboardingMode]);
 
   function newChat() {
     if (busy || actionBusy) return;
@@ -278,7 +333,10 @@ export function LearningTutor({ userRole }: { userRole: string }) {
       const response = await fetch("/api/learning/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: (() => { const recent = conversation.slice(-12); const latestImageIndex = recent.reduce((last, message, index) => message.images?.length ? index : last, -1); return recent.map((message, index) => ({ role: message.role, content: message.content, ...(index === latestImageIndex && message.images?.length ? { images: message.images } : {}) })); })() }),
+        body: JSON.stringify({
+          ...(onboardingMode ? { mode: "school_onboarding" } : {}),
+          messages: (() => { const recent = conversation.slice(-12); const latestImageIndex = recent.reduce((last, message, index) => message.images?.length ? index : last, -1); return recent.map((message, index) => ({ role: message.role, content: message.content, ...(index === latestImageIndex && message.images?.length ? { images: message.images } : {}) })); })(),
+        }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Die KI konnte nicht antworten.");
@@ -387,11 +445,41 @@ export function LearningTutor({ userRole }: { userRole: string }) {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Die Änderungen konnten nicht gespeichert werden.");
+      const actionSummary = String(payload.summary || "Änderungen verarbeitet.");
       setChats((current) => current.map((chat) => chat.id === chatId
         ? { ...chat, messages: chat.messages.map((message, index) => index === messageIndex
-            ? { ...message, actionResult: String(payload.summary || "Änderungen verarbeitet."), actionsApplied: true }
+            ? { ...message, actionResult: actionSummary, actionsApplied: true }
             : message) }
         : chat));
+
+      if (onboardingMode && payload.success) {
+        const currentChat = chats.find((chat) => chat.id === chatId);
+        if (currentChat) {
+          const continueInstruction = "Die vorgeschlagenen Änderungen wurden soeben erfolgreich gespeichert. Prüfe den aktualisierten Schulkontext und führe die Einrichtung mit dem nächsten noch offenen Schritt fort. Stelle wieder nur eine konkrete Frage.";
+          const history = [
+            ...currentChat.messages.slice(-11).map((message) => ({ role: message.role, content: message.content })),
+            { role: "user" as const, content: continueInstruction },
+          ];
+          const nextResponse = await fetch("/api/learning/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "school_onboarding", messages: history }),
+          });
+          const nextPayload = await nextResponse.json();
+          if (!nextResponse.ok) throw new Error(nextPayload.error || "Die Änderungen sind gespeichert, aber die nächste Einrichtungsfrage konnte nicht geladen werden.");
+          setChats((current) => current.map((chat) => chat.id === chatId
+            ? {
+                ...chat,
+                messages: [...chat.messages, {
+                  role: "assistant",
+                  content: String(nextPayload.answer ?? "Die Einrichtung kann fortgesetzt werden. Was möchtest du als Nächstes einrichten?"),
+                  files: Array.isArray(nextPayload.files) ? nextPayload.files : [],
+                  actions: Array.isArray(nextPayload.actions) ? nextPayload.actions : [],
+                }],
+              }
+            : chat));
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Die Änderungen konnten nicht gespeichert werden.");
     } finally {
@@ -416,7 +504,7 @@ export function LearningTutor({ userRole }: { userRole: string }) {
     <aside className="teacher-ai-sidebar">
       <div className="teacher-ai-brand">
         <span className="teacher-ai-brand-mark">S</span>
-        <span><strong>SchulWatch KI</strong><small>{isStudent ? "Dein Lern-Assistent" : "Dein Schul-Assistent"}</small></span>
+        <span><strong>SchulWatch KI</strong><small>{onboardingMode ? "Deine Schule wird eingerichtet" : isStudent ? "Dein Lern-Assistent" : "Dein Schul-Assistent"}</small></span>
       </div>
       <button type="button" className="teacher-ai-new-chat" onClick={newChat} disabled={busy || actionBusy}>
         <span aria-hidden="true">＋</span> Neuer Chat
@@ -439,9 +527,9 @@ export function LearningTutor({ userRole }: { userRole: string }) {
     <div className="teacher-ai-conversation">
       <header className="teacher-ai-conversation-head">
         <div className="teacher-ai-context">
-          <span className="teacher-ai-context-label">{isStudent ? "LERN-ASSISTENT" : "SCHUL-ASSISTENT"}</span>
+          <span className="teacher-ai-context-label">{onboardingMode ? "GEFÜHRTER SCHULSTART" : isStudent ? "LERN-ASSISTENT" : "SCHUL-ASSISTENT"}</span>
           <strong>{activeChat?.title ?? "Neuer Chat"}</strong>
-          <span>Freier Chat · Dateien, Planung und Schulaufgaben</span>
+          <span>{onboardingMode ? "Die KI fragt nach und richtet bestätigte Angaben ein." : "Freier Chat · Dateien, Planung und Schulaufgaben"}</span>
         </div>
         <span className="teacher-ai-ready"><i /> Bereit</span>
       </header>
@@ -451,16 +539,18 @@ export function LearningTutor({ userRole }: { userRole: string }) {
           <div className="teacher-ai-welcome">
             <div className="teacher-ai-welcome-mark">S</div>
             <div className="teacher-ai-welcome-eyebrow">SCHULWATCH KI</div>
-            <h2>{isStudent ? "Was möchtest du heute wissen?" : "Wobei kann ich dich unterstützen?"}</h2>
-            <p>{isStudent
-              ? "Frag einfach drauflos. Ich kann dir Themen erklären, bei Hausaufgaben helfen und Lernmaterialien als Datei erstellen."
-              : "Stelle Fragen, erstelle Dateien, entwirf Stundenpläne und bereite Klassen- und Fachstrukturen vor. Änderungen werden erst nach deiner Bestätigung gespeichert."}</p>
-            <div className="teacher-ai-prompts">
+            <h2>{onboardingMode ? "Wir richten deine Schule gemeinsam ein." : isStudent ? "Was möchtest du heute wissen?" : "Wobei kann ich dich unterstützen?"}</h2>
+            <p>{onboardingMode
+              ? "Die KI stellt dir Schritt für Schritt Fragen. Sie schlägt Klassen, Fächer und Schulzeiten vor und richtet bestätigte Angaben direkt ein."
+              : isStudent
+                ? "Frag einfach drauflos. Ich kann dir Themen erklären, bei Hausaufgaben helfen und Lernmaterialien als Datei erstellen."
+                : "Stelle Fragen, erstelle Dateien, entwirf Stundenpläne und bereite Klassen- und Fachstrukturen vor. Änderungen werden erst nach deiner Bestätigung gespeichert."}</p>
+            {!onboardingMode && <div className="teacher-ai-prompts">
               {suggestions.map((suggestion) => <button type="button" key={suggestion.label}
                 onClick={() => { setInput(suggestion.text); composerRef.current?.focus(); }}>
                 <span>{suggestion.label}</span><span aria-hidden="true">↗</span>
               </button>)}
-            </div>
+            </div>}
           </div>
         ) : activeChat.messages.map((message, index) => (
           <article className={"teacher-ai-message " + message.role} key={index}>
@@ -543,6 +633,8 @@ export function LearningTutor({ userRole }: { userRole: string }) {
         </form>
         <p className="teacher-ai-footnote">{isStudent
           ? "Die KI kann Fehler machen. Prüfe wichtige Antworten und gib keine privaten Daten ein. Chats werden nicht dauerhaft gespeichert."
+          : onboardingMode
+          ? "Die KI speichert keine Änderung ohne deine Bestätigung. Lehrkräfte und Schüler werden nicht erfunden; noch fehlende Konten müssen sich zuerst registrieren."
           : "Dateien kannst du herunterladen. Änderungen an Klassen und Stundenplänen werden nur nach deiner Bestätigung gespeichert. Gib keine vertraulichen Schüler- oder Personaldaten ein."}</p>
       </div>
     </div>
