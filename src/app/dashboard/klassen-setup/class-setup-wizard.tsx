@@ -170,6 +170,45 @@ export function ClassSetupWizard({ existingClasses }: { existingClasses: Existin
       )}
 
       {step < 3 && <p className="class-setup-footer">Du behältst die Kontrolle: SchoolWatch zeigt dir die Vorschau und speichert Klassen erst, wenn du auf „Klassen jetzt erstellen“ klickst.</p>}
+      <style jsx global>{`
+.class-setup-page { padding-bottom: 72px; }
+.class-setup-intro { max-width: 760px; }
+.class-setup-wizard { max-width: 900px; margin-top: 24px; }
+.class-setup-progress { display: flex; flex-wrap: wrap; gap: 9px; margin: 18px 0; }
+.class-setup-progress span { border: 1px solid var(--border); color: var(--muted); padding: 8px 12px; border-radius: 999px; font-size: .82rem; }
+.class-setup-progress span.active { border-color: var(--border-strong); background: var(--purple-soft); color: #e3d8ff; }
+.class-setup-ai-message { display: flex; gap: 14px; align-items: flex-start; margin: 18px 0; }
+.class-setup-ai-message small { color: var(--purple); font-weight: 700; }
+.class-setup-ai-message h2 { margin: 6px 0; font-size: 1.35rem; }
+.class-setup-ai-message p { margin: 0; color: var(--muted); }
+.class-setup-ai-mark { display: grid; place-items: center; flex: 0 0 42px; height: 42px; border-radius: 14px; background: var(--purple-soft); color: var(--purple); font-weight: 800; }
+.class-setup-form { display: grid; gap: 18px; }
+.class-setup-selects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.class-setup-suffixes { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 10px; }
+.class-setup-suffixes button { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--border); color: var(--white); background: rgba(255,255,255,.03); font-weight: 750; cursor: pointer; }
+.class-setup-suffixes button.selected { color: #f0eaff; border-color: var(--purple); background: var(--purple-soft); }
+.class-setup-hint, .class-setup-footer { color: var(--muted); font-size: .88rem; }
+.class-setup-error { color: #ffb6b6; font-size: .88rem; margin: 0; }
+.class-setup-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; }
+.class-setup-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.class-setup-summary > div { display: flex; flex-direction: column; gap: 4px; padding: 14px; background: rgba(255,255,255,.025); border: 1px solid var(--border); border-radius: 13px; }
+.class-setup-summary strong { font-size: 1.7rem; color: var(--purple); }
+.class-setup-summary small { color: var(--muted); }
+.class-setup-class-list { display: flex; flex-wrap: wrap; gap: 8px; max-height: 220px; overflow: auto; padding: 2px; }
+.class-setup-class-list span { padding: 7px 11px; border-radius: 10px; border: 1px solid var(--border); font-weight: 700; }
+.class-setup-class-list span.existing { opacity: .55; text-decoration: line-through; }
+.class-setup-success { max-width: 680px; }
+.class-setup-success-mark { display: grid; place-items: center; width: 52px; height: 52px; background: var(--purple-soft); border: 1px solid var(--border-strong); border-radius: 16px; color: var(--purple); font-size: 1.7rem; }
+.class-setup-success h2 { margin-bottom: 10px; }
+.class-setup-next-links { display: grid; gap: 10px; margin-top: 18px; }
+.class-setup-footer { margin-top: 14px; }
+@media (max-width: 560px) {
+  .class-setup-selects, .class-setup-summary { grid-template-columns: 1fr; }
+  .class-setup-actions { display: grid; grid-template-columns: 1fr; }
+  .class-setup-actions .button { width: 100%; }
+  .class-setup-ai-message h2 { font-size: 1.15rem; }
+}
+`}</style>
     </section>
   );
 }
