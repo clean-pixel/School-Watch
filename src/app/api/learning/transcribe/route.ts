@@ -46,7 +46,8 @@ export async function POST(request: Request) {
     if (audio.size > 12 * 1024 * 1024) {
       return NextResponse.json({ error: "Die Aufnahme ist zu groß. Bitte sprich höchstens 60 Sekunden." }, { status: 413 });
     }
-    if (!allowedAudioTypes.has(audio.type.toLowerCase())) {
+    const mimeType = audio.type.toLowerCase().split(";")[0].trim();
+    if (!allowedAudioTypes.has(mimeType)) {
       return NextResponse.json({ error: "Dieses Audioformat wird nicht unterstützt. Bitte nutze die Mikrofonaufnahme in SchulWatch." }, { status: 415 });
     }
 
@@ -55,16 +56,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Die KI ist noch nicht verbunden. Hinterlege OPENAI_API_KEY in Vercel." }, { status: 503 });
     }
 
-    const extension = audio.type.includes("webm") ? "webm"
-      : audio.type.includes("ogg") ? "ogg"
-      : audio.type.includes("mp4") || audio.type.includes("m4a") ? "m4a"
-      : audio.type.includes("mpeg") || audio.type.includes("mpga") ? "mp3"
-      : audio.type.includes("flac") ? "flac" : "wav";
+    const extension = mimeType.includes("webm") ? "webm"
+      : mimeType.includes("ogg") ? "ogg"
+      : mimeType.includes("mp4") || mimeType.includes("m4a") ? "m4a"
+      : mimeType.includes("mpeg") || mimeType.includes("mpga") ? "mp3"
+      : mimeType.includes("flac") ? "flac" : "wav";
 
     const upstream = new FormData();
     upstream.append("model", "gpt-transcribe");
     upstream.append("language", "de");
-    upstream.append("file", new Blob([await audio.arrayBuffer()], { type: audio.type }), "schulwatch-aufnahme." + extension);
+    upstream.append("file", new Blob([await audio.arrayBuffer()], { type: mimeType }), "schulwatch-aufnahme." + extension);
 
     const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
