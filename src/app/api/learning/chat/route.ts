@@ -203,7 +203,7 @@ export async function POST(request: Request) {
       "Antworte standardmäßig auf Deutsch. Bitte liefere IMMER ein valides JSON-Objekt mit exakt den Feldern answer, files und actions.",
       "JSON-Format: {\"answer\":\"Antworttext\",\"files\":[{\"name\":\"Dateiname mit Endung\",\"format\":\"md|txt|csv|html|json\",\"content\":\"vollständiger Dateiinhalt\"}],\"actions\":[]}.",
       "Wenn keine Datei gebraucht wird, files=[]. Wenn keine bestätigungspflichtige Änderung sinnvoll oder möglich ist, actions=[].",
-      "Erlaubte actions: create_class {type,name,grade,subjects}; add_subjects {type,className,subjects}; assign_teacher {type,className,subject,teacherId}; create_timetable {type,className,entries:[{weekday,startsAt,endsAt,subject,room,weekType}]}.",
+      "Erlaubte actions: create_class {type,name,grade,subjects}; add_subjects {type,className,subjects}; assign_teacher {type,className,subject,teacherId}; create_timetable {type,className,entries:[{weekday,startsAt,endsAt,subject,room,weekType}]}; update_school_hours {type,dayStart,dayEnd}.",
       "weekday: 1=Montag, 2=Dienstag, 3=Mittwoch, 4=Donnerstag, 5=Freitag. Zeiten im 24-Stunden-Format HH:MM. weekType ist both, A oder B.",
       "Erstelle keine actions für fehlende Angaben. Frage im answer gezielt nach, wenn Schule, Klasse, Lehrkraft, Fach oder Uhrzeiten fehlen. Nutze nur Daten und Rechte aus dem Schulkontext.",
       "Dateien sind direkt herunterladbar. Nutze CSV für Tabellen/Listen und Markdown oder HTML für gut formatierte Dokumente. Dateinamen ohne Pfade."
