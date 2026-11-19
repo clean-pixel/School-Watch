@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 const suffixOptions = ["A", "B", "C", "D", "E", "F"];
@@ -15,10 +15,16 @@ export function SchoolStartWizard({ schoolName }: { schoolName: string }) {
   const [done, setDone] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
 
+  useEffect(() => {
+    const key = "schoolwatch-school-setup:" + schoolName;
+    setDone(localStorage.getItem(key) === "done");
+    setSavedCount(Number(localStorage.getItem(key + ":count") || 0));
+  }, [schoolName]);
+
   const proposed = useMemo(() => {
     const start = Number(startGrade);
     const end = Number(endGrade);
-    const letters = suffixes.slice(0, Number(parallelClasses));
+    const letters = suffixes;
     if (!Number.isInteger(start) || !Number.isInteger(end) || end < start || end - start > 12 || !letters.length) return [];
     const list: Array<{ type: "create_class"; name: string; grade: string; subjects: string[] }> = [];
     for (let grade = start; grade <= end; grade++) {
@@ -30,9 +36,11 @@ export function SchoolStartWizard({ schoolName }: { schoolName: string }) {
   }, [startGrade, endGrade, parallelClasses, suffixes]);
 
   function toggleSuffix(letter: string) {
-    setSuffixes((current) => current.includes(letter)
-      ? current.filter((item) => item !== letter)
-      : [...current, letter].sort());
+    setSuffixes((current) => {
+      const next = current.includes(letter) ? current.filter((item) => item !== letter) : [...current, letter].sort();
+      setParallelClasses(String(Math.max(1, next.length)));
+      return next;
+    });
   }
 
   async function createClasses() {
@@ -52,6 +60,8 @@ export function SchoolStartWizard({ schoolName }: { schoolName: string }) {
       if (!response.ok) throw new Error(result.error || "Die Klassen konnten nicht angelegt werden.");
       const created = Number(result.createdCount ?? 0);
       setSavedCount(created);
+      localStorage.setItem("schoolwatch-school-setup:" + schoolName, "done");
+      localStorage.setItem("schoolwatch-school-setup:" + schoolName + ":count", String(created));
       setDone(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Die Klassen konnten nicht angelegt werden.");
