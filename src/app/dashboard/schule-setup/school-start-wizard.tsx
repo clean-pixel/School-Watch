@@ -36,11 +36,11 @@ export function SchoolStartWizard({ schoolName }: { schoolName: string }) {
   }, [startGrade, endGrade, parallelClasses, suffixes]);
 
   function toggleSuffix(letter: string) {
-    setSuffixes((current) => {
-      const next = current.includes(letter) ? current.filter((item) => item !== letter) : [...current, letter].sort();
-      setParallelClasses(String(Math.max(1, next.length)));
-      return next;
-    });
+    const updated = suffixes.includes(letter)
+      ? suffixes.filter((item) => item !== letter)
+      : [...suffixes, letter].sort();
+    setSuffixes(updated);
+    setParallelClasses(String(Math.max(1, updated.length)));
   }
 
   async function createClasses() {
