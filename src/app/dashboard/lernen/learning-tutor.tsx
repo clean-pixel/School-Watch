@@ -278,7 +278,7 @@ export function LearningTutor({ userRole }: { userRole: string }) {
       const response = await fetch("/api/learning/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: conversation.slice(-12).map((message, index, list) => ({ role: message.role, content: message.content, ...(index === list.length - 1 && message.images?.length ? { images: message.images } : {}) })) }),
+        body: JSON.stringify({ messages: (() => { const recent = conversation.slice(-12); const latestImageIndex = recent.reduce((last, message, index) => message.images?.length ? index : last, -1); return recent.map((message, index) => ({ role: message.role, content: message.content, ...(index === latestImageIndex && message.images?.length ? { images: message.images } : {}) })); })() }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Die KI konnte nicht antworten.");
