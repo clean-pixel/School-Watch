@@ -34,11 +34,17 @@ const timetableAction = z.object({
   className: z.string().trim().min(1).max(80),
   entries: z.array(timetableEntry).min(1).max(35),
 });
+const updateSchoolHoursAction = z.object({
+  type: z.literal("update_school_hours"),
+  dayStart: z.string().regex(timePattern),
+  dayEnd: z.string().regex(timePattern),
+}).refine((item) => item.dayEnd > item.dayStart, { message: "Das Schulende muss nach dem Schulbeginn liegen." });
 const actionSchema = z.discriminatedUnion("type", [
   createClassAction,
   addSubjectsAction,
   assignTeacherAction,
   timetableAction,
+  updateSchoolHoursAction,
 ]);
 
 const fileSchema = z.object({
@@ -61,6 +67,7 @@ const messageSchema = z.object({
   }
 });
 const requestSchema = z.object({
+  mode: z.enum(["school_onboarding"]).optional(),
   messages: z.array(messageSchema).min(1).max(12),
 }).superRefine((value, context) => {
   value.messages.forEach((message, index) => {
@@ -98,7 +105,7 @@ const roleInstructions: Record<string, string[]> = {
   school_admin: [
     "Du bist SchulWatch KI, ein Verwaltungs- und Organisationsassistent für Schulleitungen in Deutschland.",
     "Du darfst auf Basis des mitgelieferten Schulkontexts Klassen, Fächer, Lehrkraft-Zuordnungen und Stundenpläne vorbereiten.",
-    "Wenn die Schulleitung eine neue Schule oder Klassenstruktur einrichten möchte, führe sie wie ein persönlicher Einrichtungsassistent: Frage zuerst nach dem Jahrgangsbereich, dann nach der Anzahl der Parallelklassen und den Buchstaben (zum Beispiel A, B, C, D). Stelle immer nur eine konkrete Frage auf einmal. Zeige danach eine übersichtliche Vorschau wie 5A, 5B, 5C, 6A, 6B und lege Klassen erst als bestätigungspflichtige create_class-Actions vor. Nach der Bestätigung erkläre die nächsten Schritte: Fächer, Lehrkräfte, Schülerzuordnung und Stundenplan.",
+    "Wenn die Schulleitung eine neue Schule oder Klassenstruktur einrichten möchte, führe sie wie ein persönlicher Einrichtungsassistent: Frage zuerst nach dem Jahrgangsbereich, dann nach der Anzahl der Parallelklassen und den Buchstaben (zum Beispiel A, B, C, D). Stelle immer nur eine konkrete Frage auf einmal. Erfasse anschließend Fächer, Schulzeiten und vorhandene Lehrkräfte. Zeige vor jeder Speicherung eine klare Vorschau und verwende bestätigungspflichtige actions. Nach jedem gespeicherten Schritt soll die Einrichtung sinnvoll weitergehen.",
     "Du kannst Dateien wie CSV-Listen, Stundenplanentwürfe, Schulbriefe, Tabellen und Dokumente erzeugen. Gib Dateien in files zurück, mit sinnvoller Endung im Namen.",
     "Für Datenbankänderungen gib ausschließlich konkrete Vorschläge in actions zurück. Nichts wird gespeichert, bevor die Schulleitung auf 'Änderungen übernehmen' klickt.",
     "Verwende für Klassen und Lehrkräfte exakt die Namen und IDs aus dem Schulkontext. Erfinde niemals Mitarbeitende oder Zuordnungen. Bei mehrdeutiger Lehrkraft-Zuordnung frage nach statt zu raten.",
@@ -138,7 +145,7 @@ export async function POST(request: Request) {
     let schoolContext = "Kein Schulprofil mit dieser Sitzung verbunden.";
     if (profile.school_id) {
       const [schoolResult, classesResult, subjectsResult, assignmentsResult, teachersResult] = await Promise.all([
-        supabase.from("schools").select("name,city,state,day_start_time,day_end_time").eq("id", profile.school_id).maybeSingle(),
+        supabase.from("schools").select("name,school_type,city,state,day_start_time,day_end_time").eq("id", profile.school_id).maybeSingle(),
         supabase.from("classes").select("id,name,grade").eq("school_id", profile.school_id).order("name").limit(100),
         supabase.from("class_subjects").select("class_id,subject,weekly_periods_a,weekly_periods_b").eq("school_id", profile.school_id).limit(500),
         (() => {
@@ -179,13 +186,24 @@ export async function POST(request: Request) {
       });
     }
 
+    const onboardingInstructions = role === "school_admin" && parsed.data.mode === "school_onboarding" ? [
+      "Du befindest dich im geführten Schulstart. Ziel ist, die Schule schrittweise mit den vorhandenen SchulWatch-Funktionen einzurichten. Nutze den mitgelieferten aktuellen Schulkontext, frage nicht erneut nach bereits gespeicherten Angaben und stelle immer nur EINE konkrete Frage pro Antwort.",
+      "Ablauf: (1) Frage nach dem Jahrgangsbereich (z. B. 5 bis 10). (2) Frage nach der Anzahl der Parallelklassen und den gewünschten Klassenbuchstaben oder Namen (z. B. A, B, C, D). (3) Frage nach den Fächern, die standardmäßig zu jeder Klasse gehören; kläre Abweichungen nur bei Bedarf. (4) Frage nach Beginn und Ende des Schultags im Format HH:MM. (5) Erstelle eine vollständige Vorschau aller Klassen samt Fächern und Schulzeiten. Erst nach einer klaren Zustimmung gib create_class-Actions und update_school_hours als Vorschlag aus.",
+      "Nutze create_class für jede neue Klasse und trage gemeinsame Fächer direkt in subjects ein. Nutze grade als reine Jahrgangszahl. Verwende exakt die vereinbarten Klassennamen. Vermeide Dubletten und beachte vorhandene Klassen im Schulkontext. Die Oberfläche lässt höchstens 20 Änderungen pro Bestätigung zu; teile sehr große Einrichtungen in mehrere sinnvolle Batches.",
+      "Nach erfolgreichem Speichern wird dir die Anwendung den aktualisierten Schulkontext erneut geben. Fahre dann automatisch mit dem nächsten sinnvollen Schritt fort: vorhandene Lehrkräfte und deren bereits hinterlegte Fächer prüfen, passende Zuordnungen mit assign_teacher vorbereiten und erst danach Stundenpläne mit create_timetable vorschlagen.",
+      "Erfinde niemals Lehrkräfte oder IDs. Weise nur Lehrkräfte zu, die im Schulkontext mit echter teacherId vorhanden sind und deren Fächerprofil passt. Wenn noch keine Lehrkräfte registriert/freigegeben sind, erkläre, dass Lehrkräfte sich erst registrieren und der Schule zugeordnet sein müssen; biete dann eine passende Einladungsliste oder Checkliste als Datei an, statt Platzhalter anzulegen.",
+      "Erstelle Stundenpläne nur, wenn Klassenfächer und gültige Lehrkraft-Zuordnungen vorhanden sind. Frage nach Unterrichtszeiten, Pausen und Raumangaben, wenn sie für einen vollständigen Plan fehlen. Erfinde keine tatsächlichen Stundenpläne oder Lehrkraft-Zuweisungen.",
+      "Nutze update_school_hours nur mit ausdrücklich genannten Zeiten. Zeige die Zeiten in der Vorschau und ändere sie erst nach der Zustimmung. Schülerkonten und Klassenmitgliedschaften können über die hier verfügbaren Aktionen nicht automatisch angelegt werden; erkläre diesen Schritt später ehrlich.",
+      "Wenn ein Schritt nicht mit einer verfügbaren action umgesetzt werden kann, sage klar, was noch manuell oder nach einer Registrierung erledigt werden muss. Behaupte niemals, dass eine Änderung bereits gespeichert wurde, bevor die Anwendung sie bestätigt."
+    ] : [];
     const systemText = [
       ...roleInstructions[role],
+      ...onboardingInstructions,
       "Schulkontext (Datenbankauszug; nur für diesen Benutzer und dessen school_id): " + schoolContext,
       "Antworte standardmäßig auf Deutsch. Bitte liefere IMMER ein valides JSON-Objekt mit exakt den Feldern answer, files und actions.",
       "JSON-Format: {\"answer\":\"Antworttext\",\"files\":[{\"name\":\"Dateiname mit Endung\",\"format\":\"md|txt|csv|html|json\",\"content\":\"vollständiger Dateiinhalt\"}],\"actions\":[]}.",
       "Wenn keine Datei gebraucht wird, files=[]. Wenn keine bestätigungspflichtige Änderung sinnvoll oder möglich ist, actions=[].",
-      "Erlaubte actions: create_class {type,name,grade,subjects}; add_subjects {type,className,subjects}; assign_teacher {type,className,subject,teacherId}; create_timetable {type,className,entries:[{weekday,startsAt,endsAt,subject,room,weekType}]}.",
+      "Erlaubte actions: create_class {type,name,grade,subjects}; add_subjects {type,className,subjects}; assign_teacher {type,className,subject,teacherId}; create_timetable {type,className,entries:[{weekday,startsAt,endsAt,subject,room,weekType}]}; update_school_hours {type,dayStart,dayEnd}.",
       "weekday: 1=Montag, 2=Dienstag, 3=Mittwoch, 4=Donnerstag, 5=Freitag. Zeiten im 24-Stunden-Format HH:MM. weekType ist both, A oder B.",
       "Erstelle keine actions für fehlende Angaben. Frage im answer gezielt nach, wenn Schule, Klasse, Lehrkraft, Fach oder Uhrzeiten fehlen. Nutze nur Daten und Rechte aus dem Schulkontext.",
       "Dateien sind direkt herunterladbar. Nutze CSV für Tabellen/Listen und Markdown oder HTML für gut formatierte Dokumente. Dateinamen ohne Pfade."
@@ -203,7 +221,7 @@ export async function POST(request: Request) {
           : message.content,
       })),
     ];
-    const result = await runOpenAIResponse({ input, maxOutputTokens: 3400, jsonMode: true });
+    const result = await runOpenAIResponse({ input, maxOutputTokens: parsed.data.mode === "school_onboarding" ? 6000 : 3400, jsonMode: true });
 
     let rawOutput: unknown;
     try {

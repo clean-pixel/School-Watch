@@ -34,11 +34,17 @@ const timetableAction = z.object({
   className: z.string().trim().min(1).max(80),
   entries: z.array(timetableEntry).min(1).max(35),
 });
+const updateSchoolHoursAction = z.object({
+  type: z.literal("update_school_hours"),
+  dayStart: z.string().regex(timePattern),
+  dayEnd: z.string().regex(timePattern),
+}).refine((item) => item.dayEnd > item.dayStart, { message: "Das Schulende muss nach dem Schulbeginn liegen." });
 const actionSchema = z.discriminatedUnion("type", [
   createClassAction,
   addSubjectsAction,
   assignTeacherAction,
   timetableAction,
+  updateSchoolHoursAction,
 ]);
 const requestSchema = z.object({ actions: z.array(actionSchema).min(1).max(20) });
 
@@ -74,6 +80,25 @@ export async function POST(request: Request) {
     let createdCount = 0;
 
     for (const action of parsed.data.actions) {
+      if (action.type === "update_school_hours") {
+        if (profile.role !== "school_admin") {
+          results.push("Schulzeiten: Nur die Schulleitung darf die Schulzeiten ändern.");
+          continue;
+        }
+        const updated = await supabase.from("schools")
+          .update({ day_start_time: action.dayStart, day_end_time: action.dayEnd })
+          .eq("id", profile.school_id)
+          .select("id")
+          .maybeSingle();
+        if (updated.error || !updated.data) {
+          results.push("Schulzeiten: konnten nicht gespeichert werden. Prüfe die Berechtigung und die Zeitangaben.");
+          continue;
+        }
+        createdCount++;
+        results.push("Schulzeiten: " + action.dayStart + " bis " + action.dayEnd + " Uhr gespeichert.");
+        continue;
+      }
+
       if (action.type === "create_class") {
         if (profile.role !== "school_admin") {
           results.push("Klasse " + action.name + ": Nur die Schulleitung darf Klassen anlegen.");

@@ -3,10 +3,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createClassSubject } from "@/app/dashboard/actions";
 import { SchoolResearchPanel } from "./school-research-panel";
-import { SchoolStartWizard } from "./school-start-wizard";
+import { LearningTutor } from "@/app/dashboard/lernen/learning-tutor";
 
-export default async function SchoolSetupPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
-  const { status } = await searchParams;
+export default async function SchoolSetupPage({ searchParams }: { searchParams: Promise<{ status?: string; start?: string }> }) {
+  const { status, start } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/anmelden");
@@ -35,6 +35,24 @@ export default async function SchoolSetupPage({ searchParams }: { searchParams: 
     <div className="eyebrow">Einrichtung für die Schulleitung</div>
     <h1 style={{fontSize:"2.7rem"}}>Schulprofil & Lehrpläne</h1>
     {status && <div className="notice" role="status">{statusText[status] || "Aktion abgeschlossen."}</div>}
+    {(start === "1" || classes.length === 0) ? <section className="section">
+      <div className="eyebrow">Persönlicher Schulstart</div>
+      <h2>Deine KI richtet die Schule gemeinsam mit dir ein</h2>
+      <p>Du beantwortest kurze Fragen. Die KI erstellt daraus einen konkreten Plan und übernimmt bestätigte Änderungen direkt in deine Schulverwaltung.</p>
+      <LearningTutor
+        userRole="school_admin"
+        initialTitle="Schule mit KI einrichten"
+        initialPrompt="Ich möchte meine neu erstellte Schule vollständig einrichten. Führe mich bitte Schritt für Schritt durch die Einrichtung und stelle mir zuerst die wichtigste Frage."
+        onboardingMode
+      />
+    </section> : <section className="section">
+      <div className="card">
+        <div className="eyebrow">KI-Einrichtung</div>
+        <h2>Einrichtung mit der KI fortsetzen</h2>
+        <p>Die KI kann dir helfen, weitere Klassen, Fächer, Lehrkraft-Zuordnungen und Stundenpläne vorzubereiten.</p>
+        <Link className="button" href="/dashboard/schule-setup?start=1">KI-Einrichtungsassistent öffnen →</Link>
+      </div>
+    </section>}
     <SchoolResearchPanel
       school={{name:school.name,state:school.state,city:school.city}}
       dayStart={school.day_start_time}
