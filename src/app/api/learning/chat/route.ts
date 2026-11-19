@@ -208,26 +208,26 @@ export async function POST(request: Request) {
       }),
     ];
     const imagePaths = parsed.data.messages.at(-1)?.images ?? [];
-    if (imagePaths.length) {
-      const signedImages = await Promise.all(imagePaths.map((path) =>
-        supabase.storage.from("ai-chat-uploads").createSignedUrl(path, 300)
-      ));
-      const signedUrls = signedImages.map((result) => {
-        if (result.error || !result.data?.signedUrl) {
-          throw new Error("Ein hochgeladenes Bild konnte nicht geöffnet werden. Bitte lade es erneut hoch.");
-        }
-        return result.data.signedUrl;
-      });
-      const currentMessage = input[input.length - 1];
-      if (Array.isArray(currentMessage.content)) {
-        currentMessage.content = [
-          currentMessage.content[0],
-          ...signedUrls.map((url) => ({ type: "input_image" as const, image_url: url, detail: "high" as const })),
-        ];
-      }
-    }
     let result: Awaited<ReturnType<typeof runOpenAIResponse>>;
     try {
+      if (imagePaths.length) {
+        const signedImages = await Promise.all(imagePaths.map((path) =>
+          supabase.storage.from("ai-chat-uploads").createSignedUrl(path, 300)
+        ));
+        const signedUrls = signedImages.map((item) => {
+          if (item.error || !item.data?.signedUrl) {
+            throw new Error("Ein hochgeladenes Bild konnte nicht geöffnet werden. Bitte lade es erneut hoch.");
+          }
+          return item.data.signedUrl;
+        });
+        const currentMessage = input[input.length - 1];
+        if (Array.isArray(currentMessage.content)) {
+          currentMessage.content = [
+            currentMessage.content[0],
+            ...signedUrls.map((url) => ({ type: "input_image" as const, image_url: url, detail: "high" as const })),
+          ];
+        }
+      }
       result = await runOpenAIResponse({ input, maxOutputTokens: 3400, jsonMode: true });
     } finally {
       if (imagePaths.length) {
