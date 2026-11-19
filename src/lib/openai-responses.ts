@@ -1,8 +1,12 @@
 export type AiCitation = { title: string; url: string };
 
+export type OpenAIInputPart =
+  | { type: "input_text"; text: string }
+  | { type: "input_image"; image_url: string; detail?: "low" | "high" | "auto" };
+
 export type OpenAIInputMessage = {
   role: "developer" | "system" | "user" | "assistant";
-  content: string;
+  content: string | OpenAIInputPart[];
 };
 
 type RunOptions = {

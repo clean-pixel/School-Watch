@@ -49,11 +49,14 @@ const fileSchema = z.object({
 const outputSchema = z.object({
   answer: z.string().trim().min(1).max(18000),
   files: z.array(fileSchema).max(4).default([]),
-  actions: z.array(actionSchema).max(20).default([]),
+  actions: z.array(actionSchema).max(60).default([]),
 });
+const imagePathSchema = z.string().trim().min(1).max(220)
+  .regex(/^[0-9a-f-]{36}\/[A-Za-z0-9._-]+$/i, "Ungültiger Bildpfad.");
 const messageSchema = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.string().trim().min(1).max(20000),
+  images: z.array(imagePathSchema).max(3).optional(),
 });
 const requestSchema = z.object({
   messages: z.array(messageSchema).min(1).max(12),
@@ -66,6 +69,11 @@ const requestSchema = z.object({
   if (value.messages[value.messages.length - 1]?.role !== "user") {
     context.addIssue({ code: "custom", path: ["messages"], message: "Die letzte Nachricht muss von dir stammen." });
   }
+  value.messages.forEach((message, index) => {
+    if (message.images?.length && (message.role !== "user" || index !== value.messages.length - 1)) {
+      context.addIssue({ code: "custom", path: ["messages", index, "images"], message: "Bilder dürfen nur an die aktuelle Nachricht angehängt werden." });
+    }
+  });
 });
 
 const roleInstructions: Record<string, string[]> = {
@@ -89,6 +97,9 @@ const roleInstructions: Record<string, string[]> = {
   school_admin: [
     "Du bist SchulWatch KI, ein Verwaltungs- und Organisationsassistent für Schulleitungen in Deutschland.",
     "Du darfst auf Basis des mitgelieferten Schulkontexts Klassen, Fächer, Lehrkraft-Zuordnungen und Stundenpläne vorbereiten.",
+    "Wenn die Schulleitung Klassen einrichten möchte, führe sie wie ein kurzes interaktives Tutorial: Frage zuerst nach den Jahrgangsstufen (z. B. 5 bis 10), danach nach der Anzahl der Parallelklassen bzw. den Buchstaben (A, B, C, D usw.) und optional nach gemeinsamen Fächern. Stelle immer nur die nächste notwendige Rückfrage, statt alle Angaben auf einmal zu verlangen.",
+    "Erzeuge noch keine create_class-Aktionen, solange Jahrgänge und Buchstaben nicht klar sind. Zeige dann eine übersichtliche Vorschau wie 5A, 5B, 5C, 6A, 6B und frage ausdrücklich, ob diese Klassen angelegt werden sollen. Die Schulleitung muss die vorgeschlagenen Aktionen anschließend über „Änderungen übernehmen“ bestätigen.",
+    "Nach erfolgreicher Anlage erkläre als nächsten Schritt, wie die Schulleitung Fächer und Lehrkräfte zuordnet und danach die Stundenpläne einrichtet. Erfinde keine Fächer, Lehrkräfte oder Schulangaben.",
     "Du kannst Dateien wie CSV-Listen, Stundenplanentwürfe, Schulbriefe, Tabellen und Dokumente erzeugen. Gib Dateien in files zurück, mit sinnvoller Endung im Namen.",
     "Für Datenbankänderungen gib ausschließlich konkrete Vorschläge in actions zurück. Nichts wird gespeichert, bevor die Schulleitung auf 'Änderungen übernehmen' klickt.",
     "Verwende für Klassen und Lehrkräfte exakt die Namen und IDs aus dem Schulkontext. Erfinde niemals Mitarbeitende oder Zuordnungen. Bei mehrdeutiger Lehrkraft-Zuordnung frage nach statt zu raten.",
@@ -183,9 +194,47 @@ export async function POST(request: Request) {
 
     const input: OpenAIInputMessage[] = [
       { role: "developer", content: systemText },
-      ...parsed.data.messages,
+      ...parsed.data.messages.map((message) => {
+        const paths = message.images ?? [];
+        if (!paths.length) return { role: message.role, content: message.content };
+        const imagePaths = paths.map((path) => path.trim());
+        if (imagePaths.some((path) => !path.startsWith(user.id + "/"))) {
+          throw new Error("Ein Bild gehört nicht zu deinem Konto.");
+        }
+        return { role: message.role, content: [
+          { type: "input_text" as const, text: message.content },
+          ...imagePaths.map((path) => ({ type: "input_image" as const, image_url: path, detail: "high" as const })),
+        ] };
+      }),
     ];
-    const result = await runOpenAIResponse({ input, maxOutputTokens: 3400, jsonMode: true });
+    const imagePaths = parsed.data.messages.at(-1)?.images ?? [];
+    let result: Awaited<ReturnType<typeof runOpenAIResponse>>;
+    try {
+      if (imagePaths.length) {
+        const signedImages = await Promise.all(imagePaths.map((path) =>
+          supabase.storage.from("ai-chat-uploads").createSignedUrl(path, 300)
+        ));
+        const signedUrls = signedImages.map((item) => {
+          if (item.error || !item.data?.signedUrl) {
+            throw new Error("Ein hochgeladenes Bild konnte nicht geöffnet werden. Bitte lade es erneut hoch.");
+          }
+          return item.data.signedUrl;
+        });
+        const currentMessage = input[input.length - 1];
+        if (Array.isArray(currentMessage.content)) {
+          currentMessage.content = [
+            currentMessage.content[0],
+            ...signedUrls.map((url) => ({ type: "input_image" as const, image_url: url, detail: "high" as const })),
+          ];
+        }
+      }
+      result = await runOpenAIResponse({ input, maxOutputTokens: 3400, jsonMode: true });
+    } finally {
+      if (imagePaths.length) {
+        const removed = await supabase.storage.from("ai-chat-uploads").remove(imagePaths);
+        if (removed.error) console.error("[SchulWatch AI] Temporary image cleanup failed:", removed.error.message);
+      }
+    }
 
     let rawOutput: unknown;
     try {

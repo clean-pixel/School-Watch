@@ -7,6 +7,12 @@ export async function middleware(request: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return response;
   const supabase = createServerClient(url, key, {
+    cookieOptions: {
+      maxAge: 60 * 60 * 24 * 30,
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    },
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {

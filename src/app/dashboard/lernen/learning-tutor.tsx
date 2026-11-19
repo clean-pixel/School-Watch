@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type GeneratedFile = { name: string; format: "md" | "txt" | "csv" | "html" | "json"; content: string };
 type ProposedAction =
@@ -8,9 +9,11 @@ type ProposedAction =
   | { type: "add_subjects"; className: string; subjects: string[] }
   | { type: "assign_teacher"; className: string; subject: string; teacherId: string }
   | { type: "create_timetable"; className: string; entries: Array<{ weekday: number; startsAt: string; endsAt: string; subject: string; room?: string | null; weekType: "both" | "A" | "B" }> };
+type ImageAttachment = { path: string; preview: string };
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  images?: ImageAttachment[];
   files?: GeneratedFile[];
   actions?: ProposedAction[];
   actionResult?: string;
@@ -223,6 +226,42 @@ function actionDescription(action: ProposedAction) {
   return "Schuländerung";
 }
 
+
+async function prepareImage(file: File): Promise<{ file: File; preview: string }> {
+  if (!file.type.startsWith("image/")) throw new Error("Bitte wähle eine Bilddatei aus.");
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Das Bild konnte nicht vorbereitet werden.");
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Das Bild konnte nicht komprimiert werden.")), "image/jpeg", 0.82);
+  });
+  if (blob.size > 4 * 1024 * 1024) throw new Error("Das Bild ist zu groß. Bitte wähle ein kleineres Foto.");
+  const preview = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Bildvorschau fehlgeschlagen."));
+    reader.onerror = () => reject(new Error("Bildvorschau fehlgeschlagen."));
+    reader.readAsDataURL(blob);
+  });
+  return {
+    file: new File([blob], "schoolwatch-" + crypto.randomUUID() + ".jpg", { type: "image/jpeg" }),
+    preview,
+  };
+}
+
+function speakMessage(text: string) {
+  if (!("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "de-DE";
+  window.speechSynthesis.speak(utterance);
+}
+
 export function LearningTutor({ userRole }: { userRole: string }) {
   const [chats, setChats] = useState<ChatSession[]>([{ id: "start", title: "Neuer Chat", messages: [] }]);
   const [activeChatId, setActiveChatId] = useState("start");
@@ -230,7 +269,22 @@ export function LearningTutor({ userRole }: { userRole: string }) {
   const [busy, setBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [error, setError] = useState("");
+  const [selectedImages, setSelectedImages] = useState<ImageAttachment[]>([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (recordingTimerRef.current !== null) window.clearTimeout(recordingTimerRef.current);
+    mediaRecorderRef.current?.stop();
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
   const activeChat = useMemo(() => chats.find((chat) => chat.id === activeChatId) ?? chats[0], [chats, activeChatId]);
   const isStudent = userRole === "student";
   const canApplyActions = userRole === "teacher" || userRole === "school_admin";
@@ -247,22 +301,32 @@ export function LearningTutor({ userRole }: { userRole: string }) {
 
   async function send(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const content = input.trim();
-    if (!content || busy || !activeChat) return;
+    const attachments = [...selectedImages];
+    const typedContent = input.trim();
+    const content = typedContent || (attachments.length ? "Bitte analysiere das angehängte Foto und hilf mir damit." : "");
+    if (!content || busy || uploadingImages || transcribing || recording || !activeChat) return;
     const chatId = activeChat.id;
-    const conversation: ChatMessage[] = [...activeChat.messages, { role: "user", content }];
+    const conversation: ChatMessage[] = [...activeChat.messages, { role: "user", content, images: attachments }];
     setChats((current) => current.map((chat) => chat.id === chatId
       ? { ...chat, title: chat.messages.length === 0 ? titleFromMessage(content) : chat.title, messages: conversation }
       : chat));
     setInput("");
+    setSelectedImages([]);
     setError("");
     setBusy(true);
 
     try {
+      const requestMessages = conversation.slice(-12).map((message, index, allMessages) => ({
+        role: message.role,
+        content: message.content,
+        ...(index === allMessages.length - 1 && message.images?.length
+          ? { images: message.images.map((image) => image.path) }
+          : {}),
+      }));
       const response = await fetch("/api/learning/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: conversation.slice(-12).map(({ role, content: messageContent }) => ({ role, content: messageContent })) }),
+        body: JSON.stringify({ messages: requestMessages }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Die KI konnte nicht antworten.");
@@ -279,11 +343,112 @@ export function LearningTutor({ userRole }: { userRole: string }) {
         : chat));
     } catch (err) {
       setChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, messages: activeChat.messages } : chat));
-      setInput(content);
+      setInput(typedContent);
+      setSelectedImages(attachments);
       setError(err instanceof Error ? err.message : "Verbindung zur SchulWatch KI fehlgeschlagen.");
     } finally {
       setBusy(false);
       composerRef.current?.focus();
+    }
+  }
+
+  async function selectImages(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!files.length) return;
+    if (selectedImages.length + files.length > 3) {
+      setError("Du kannst höchstens drei Bilder gleichzeitig anhängen.");
+      return;
+    }
+    setError("");
+    setUploadingImages(true);
+    const uploadedPaths: string[] = [];
+    try {
+      const supabase = createClient();
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw new Error("Bitte melde dich erneut an, bevor du ein Foto hochlädst.");
+      const attachments: ImageAttachment[] = [];
+      for (const originalFile of files) {
+        const prepared = await prepareImage(originalFile);
+        const path = user.id + "/" + crypto.randomUUID() + ".jpg";
+        const { error: uploadError } = await supabase.storage.from("ai-chat-uploads").upload(path, prepared.file, {
+          contentType: "image/jpeg",
+          upsert: false,
+        });
+        if (uploadError) throw new Error("Das Foto konnte nicht hochgeladen werden. " + uploadError.message);
+        uploadedPaths.push(path);
+        attachments.push({ path, preview: prepared.preview });
+      }
+      setSelectedImages((current) => [...current, ...attachments]);
+    } catch (cause) {
+      if (uploadedPaths.length) await createClient().storage.from("ai-chat-uploads").remove(uploadedPaths);
+      setError(cause instanceof Error ? cause.message : "Foto-Upload fehlgeschlagen.");
+    } finally {
+      setUploadingImages(false);
+    }
+  }
+
+  async function toggleRecording() {
+    if (recording) {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setError("Dein Browser unterstützt keine Mikrofonaufnahme. Nutze bitte die Texteingabe.");
+      return;
+    }
+    setError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+      const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"]
+        .find((candidate) => MediaRecorder.isTypeSupported(candidate));
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) audioChunksRef.current.push(event.data);
+      };
+      recorder.onerror = () => {
+        setRecording(false);
+        setError("Die Mikrofonaufnahme ist fehlgeschlagen. Prüfe die Mikrofonberechtigung.");
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        setRecording(false);
+        if (recordingTimerRef.current !== null) window.clearTimeout(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        audioChunksRef.current = [];
+        if (!blob.size) return;
+        setTranscribing(true);
+        try {
+          const form = new FormData();
+          form.append("audio", new File([blob], "schulwatch-aufnahme.webm", { type: blob.type || "audio/webm" }));
+          const response = await fetch("/api/learning/transcribe", { method: "POST", body: form });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || "Sprache konnte nicht erkannt werden.");
+          const transcript = String(payload.transcript ?? "").trim();
+          if (!transcript) throw new Error("Es wurde keine Sprache erkannt.");
+          setInput((current) => current.trim() ? current.trim() + " " + transcript : transcript);
+          composerRef.current?.focus();
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Spracheingabe fehlgeschlagen.");
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      recorder.start();
+      setRecording(true);
+      recordingTimerRef.current = window.setTimeout(() => {
+        if (recorder.state === "recording") recorder.stop();
+      }, 30000);
+    } catch (cause) {
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      setRecording(false);
+      setError(cause instanceof Error ? cause.message : "Mikrofonzugriff nicht möglich. Prüfe die Berechtigung deines Browsers.");
     }
   }
 
@@ -359,6 +524,10 @@ export function LearningTutor({ userRole }: { userRole: string }) {
                 onClick={() => { setInput(suggestion.text); composerRef.current?.focus(); }}>
                 <span>{suggestion.label}</span><span aria-hidden="true">↗</span>
               </button>)}
+              {userRole === "school_admin" && <button type="button" onClick={() => {
+                setInput("Ich möchte die Klassen meiner Schule einrichten. Führe mich bitte Schritt für Schritt: Frage zuerst nach den Jahrgangsstufen, danach nach der Zahl der Parallelklassen und den Buchstaben (zum Beispiel A, B, C und D). Zeige mir anschließend eine Vorschau und warte auf meine Bestätigung.");
+                composerRef.current?.focus();
+              }}><span>Klassen mit KI einrichten</span><span aria-hidden="true">↗</span></button>}
             </div>
           </div>
         ) : activeChat.messages.map((message, index) => (
@@ -366,7 +535,11 @@ export function LearningTutor({ userRole }: { userRole: string }) {
             {message.role === "assistant" && <span className="teacher-ai-message-avatar" aria-hidden="true">S</span>}
             <div className="teacher-ai-message-body">
               {message.role === "user" && <small>Du</small>}
+              {message.images && message.images.length > 0 && <div className="teacher-ai-attachments">
+                {message.images.map((image, imageIndex) => <img className="teacher-ai-attachment-preview" key={imageIndex} src={image.preview} alt="Von dir hochgeladenes Foto" />)}
+              </div>}
               <div className="teacher-ai-message-content">{renderChatContent(message.content)}</div>
+              {message.role === "assistant" && <button type="button" className="teacher-ai-speak" onClick={() => speakMessage(message.content)}>🔊 Antwort vorlesen</button>}
               {message.files && message.files.length > 0 && <div className="ai-generated-files">
                 <strong>Erstellte Dateien</strong>
                 {message.files.map((file, fileIndex) => (
@@ -400,6 +573,26 @@ export function LearningTutor({ userRole }: { userRole: string }) {
       {error && <div className="notice teacher-ai-notice" role="alert">{error}</div>}
       <div className="teacher-ai-composer-wrap">
         <form className="teacher-ai-composer" onSubmit={send}>
+          <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(event) => void selectImages(event)} />
+          <div className="teacher-ai-extra-tools">
+            <button type="button" className="teacher-ai-tool-button" onClick={() => imageInputRef.current?.click()} disabled={busy || uploadingImages || recording}>
+              {uploadingImages ? "Foto lädt …" : "＋ Foto"}
+            </button>
+            <button type="button" className={"teacher-ai-tool-button" + (recording ? " recording" : "")} onClick={() => void toggleRecording()} disabled={busy || transcribing || uploadingImages}>
+              {recording ? "Aufnahme beenden" : transcribing ? "Sprache wird erkannt …" : "🎙 Sprechen"}
+            </button>
+            {recording && <span className="teacher-ai-recording-status">Aufnahme läuft · max. 30 Sekunden</span>}
+          </div>
+          {selectedImages.length > 0 && <div className="teacher-ai-upload-previews">
+            {selectedImages.map((image, index) => <div className="teacher-ai-upload-preview" key={image.path}>
+              <img src={image.preview} alt="Foto als Chat-Anhang" />
+              <button type="button" aria-label="Foto entfernen" onClick={async () => {
+                const { error: removeError } = await createClient().storage.from("ai-chat-uploads").remove([image.path]);
+                if (removeError) setError("Das Foto konnte nicht entfernt werden.");
+                setSelectedImages((current) => current.filter((item) => item.path !== image.path));
+              }}>×</button>
+            </div>)}
+          </div>}
           <textarea ref={composerRef} value={input} onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
@@ -411,13 +604,32 @@ export function LearningTutor({ userRole }: { userRole: string }) {
             aria-label="Deine Nachricht an SchulWatch KI" disabled={busy || actionBusy} />
           <div className="teacher-ai-composer-tools">
             <span className="teacher-ai-enter-hint">Enter zum Senden · Shift + Enter für neue Zeile</span>
-            <button className="teacher-ai-send" type="submit" aria-label="Nachricht senden" disabled={busy || actionBusy || !input.trim()}>{busy ? "…" : "↑"}</button>
+            <button className="teacher-ai-send" type="submit" aria-label="Nachricht senden" disabled={busy || actionBusy || uploadingImages || transcribing || recording || (!input.trim() && selectedImages.length === 0)}>{busy ? "…" : "↑"}</button>
           </div>
         </form>
         <p className="teacher-ai-footnote">{isStudent
-          ? "Die KI kann Fehler machen. Prüfe wichtige Antworten und gib keine privaten Daten ein. Chats werden nicht dauerhaft gespeichert."
+          ? "Du kannst Fotos anhängen oder Fragen einsprechen. Die KI kann Fehler machen; prüfe wichtige Antworten und gib keine privaten Daten ein."
           : "Dateien kannst du herunterladen. Änderungen an Klassen und Stundenplänen werden nur nach deiner Bestätigung gespeichert. Gib keine vertraulichen Schüler- oder Personaldaten ein."}</p>
       </div>
     </div>
+    
+<style jsx global>{`
+.teacher-ai-extra-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 0 6px; }
+.teacher-ai-tool-button { border: 1px solid var(--border); background: rgba(255,255,255,.035); color: var(--white); border-radius: 999px; padding: 7px 12px; font-size: .82rem; cursor: pointer; }
+.teacher-ai-tool-button:disabled { opacity: .55; cursor: not-allowed; }
+.teacher-ai-tool-button.recording { border-color: #e36b6b; color: #ffb6b6; background: rgba(220,70,70,.12); }
+.teacher-ai-recording-status { color: #e7a2a2; font-size: .78rem; }
+.teacher-ai-upload-previews, .teacher-ai-attachments { display: flex; flex-wrap: wrap; gap: 9px; margin: 8px 0; }
+.teacher-ai-upload-preview { position: relative; width: 74px; height: 74px; }
+.teacher-ai-upload-preview img, .teacher-ai-attachment-preview { width: 100%; height: 100%; max-width: 210px; max-height: 180px; object-fit: cover; border-radius: 12px; border: 1px solid var(--border); }
+.teacher-ai-upload-preview button { position: absolute; top: -7px; right: -7px; width: 23px; height: 23px; border-radius: 50%; border: 1px solid var(--border); background: #252235; color: white; cursor: pointer; }
+.teacher-ai-speak { margin-top: 8px; background: transparent; border: 0; color: var(--muted); font-size: .8rem; cursor: pointer; padding: 3px 0; }
+.teacher-ai-speak:hover { color: var(--white); }
+@media (max-width: 640px) {
+  .teacher-ai-extra-tools { gap: 6px; }
+  .teacher-ai-tool-button { padding: 8px 10px; }
+  .teacher-ai-attachment-preview { max-width: 160px; }
+}
+`}</style>
   </section>;
 }

@@ -30,7 +30,7 @@ export default function LoginPage() {
   return <main className="formwrap">
     <Link className="brand" href="/"><span className="brand-mark">S</span> SchulWatch One</Link>
     <h1 style={{ fontSize: "2rem" }}>Anmelden</h1>
-    <p>Melde dich mit deinem SchulWatch-Konto an.</p>
+    <p>Melde dich mit deinem SchulWatch-Konto an. Du bleibst auf diesem Gerät bis zu 30 Tage angemeldet, solange du dich nicht abmeldest.</p>
     {error && <div className="notice" role="alert">{error}</div>}
     <form onSubmit={submit}>
       <label className="field">E-Mail-Adresse<input required name="email" type="email" autoComplete="email" /></label>
