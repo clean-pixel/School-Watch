@@ -60,6 +60,78 @@ export default async function Dashboard() {
     ? await supabase.from("students").select("id", { count: "exact", head: true }).eq("school_id", profile.school_id)
     : { count: null };
 
+
+  type StudentAgendaItem = { id: string; kind: string; title: string; detail: string; at: string };
+  const studentAgenda: StudentAgendaItem[] = [];
+  let studentAgendaError = false;
+  let studentHasClasses = false;
+
+  if (profile.role === "student" && profile.school_id) {
+    const membershipResult = await supabase
+      .from("class_memberships")
+      .select("class_id")
+      .eq("school_id", profile.school_id)
+      .eq("student_id", user.id);
+    studentAgendaError = !!membershipResult.error;
+    const classIds = (membershipResult.data ?? []).map((membership) => membership.class_id);
+    studentHasClasses = classIds.length > 0;
+
+    if (classIds.length > 0) {
+      const now = new Date().toISOString();
+      const [homeworkResult, examResult, changeResult] = await Promise.all([
+        supabase.from("homework")
+          .select("id,subject,description,due_at")
+          .eq("school_id", profile.school_id)
+          .in("class_id", classIds)
+          .gte("due_at", now)
+          .order("due_at", { ascending: true })
+          .limit(5),
+        supabase.from("exams")
+          .select("id,subject,title,starts_at")
+          .eq("school_id", profile.school_id)
+          .in("class_id", classIds)
+          .gte("starts_at", now)
+          .order("starts_at", { ascending: true })
+          .limit(5),
+        supabase.from("schedule_changes")
+          .select("id,change_type,title,details,applies_at")
+          .eq("school_id", profile.school_id)
+          .in("class_id", classIds)
+          .gte("applies_at", now)
+          .order("applies_at", { ascending: true })
+          .limit(5),
+      ]);
+
+      studentAgendaError = studentAgendaError || !!homeworkResult.error || !!examResult.error || !!changeResult.error;
+      studentAgenda.push(
+        ...(homeworkResult.data ?? []).map((item) => ({
+          id: "homework-" + item.id,
+          kind: "Hausaufgabe",
+          title: item.subject,
+          detail: item.description,
+          at: item.due_at,
+        })),
+        ...(examResult.data ?? []).map((item) => ({
+          id: "exam-" + item.id,
+          kind: "Klassenarbeit",
+          title: item.subject + " · " + item.title,
+          detail: "Dein Prüfungstermin",
+          at: item.starts_at,
+        })),
+        ...(changeResult.data ?? []).map((item) => ({
+          id: "change-" + item.id,
+          kind: item.change_type === "cancelled" ? "Unterrichtsausfall"
+            : item.change_type === "room" ? "Raumänderung"
+            : item.change_type === "teacher" ? "Lehrkraftänderung" : "Stundenplanänderung",
+          title: item.title,
+          detail: item.details,
+          at: item.applies_at,
+        })),
+      );
+      studentAgenda.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+    }
+  }
+
   return <main className="container">
     <header className="topbar">
       <Link className="brand" href="/dashboard"><span className="brand-mark">S</span> SchulWatch One</Link>
@@ -73,6 +145,28 @@ export default async function Dashboard() {
         {school && <article className="card"><div className="eyebrow">Deine Schule</div><h2 style={{ fontSize: "1.7rem" }}>{school.name}</h2><p>{school.school_type} · {school.city}</p><p>Schul-ID: <code>{school.id}</code></p>{schoolAdmin && <p>Du bist als Schulleitung angemeldet und kannst hier Klassen, Stundenpläne und Schulbereiche verwalten.</p>}</article>}
         {!profile.school_id && <div className="notice">Dein Konto ist noch keiner Schule zugeordnet.</div>}
         {schoolAdmin && <div className="grid"><article className="card"><h3>Klassen</h3><div className="stat">{classCount ?? 0}</div></article><article className="card"><h3>Lehrkräfte</h3><div className="stat">{teacherCount ?? 0}</div></article><article className="card"><h3>Schüler</h3><div className="stat">{studentCount ?? 0}</div></article></div>}
+        {profile.role === "student" && <section className="dashboard-group" style={{ margin: "26px 0" }}>
+          <div className="eyebrow">Dein persönlicher Tages-Kompass</div>
+          <h2>Was steht als Nächstes an?</h2>
+          <article className="card">
+            {studentAgendaError
+              ? <p>Deine Schultermine konnten gerade nicht geladen werden.</p>
+              : studentAgenda.length > 0
+                ? studentAgenda.slice(0, 7).map((item) => <div className="row" key={item.id}>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="eyebrow">{item.kind}</div>
+                      <strong>{item.title}</strong>
+                      {item.detail && <p style={{ margin: "5px 0 0", fontSize: ".88rem" }}>{item.detail}</p>}
+                    </div>
+                    <span style={{ flex: "0 0 auto", color: "var(--muted)", fontSize: ".82rem", textAlign: "right" }}>
+                      {new Date(item.at).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" })}
+                    </span>
+                  </div>)
+                : studentHasClasses
+                  ? <p>Es stehen gerade keine kommenden Hausaufgaben, Klassenarbeiten oder Stundenplanänderungen in deinem Kompass.</p>
+                  : <p>Sobald du einer Klasse zugeordnet bist und Termine eingetragen sind, erscheinen deine nächsten Aufgaben und Änderungen hier automatisch.</p>}
+          </article>
+        </section>}
         <div className="dashboard-groups">{linkGroups.map((group) => {
           const items = group.items.filter(([label]) => label !== "Übersicht");
           if (items.length === 0) return null;
