@@ -53,7 +53,12 @@ const outputSchema = z.object({
 });
 const messageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string().trim().min(1).max(20000),
+  content: z.string().trim().max(5000),
+  images: z.array(z.string().regex(/^data:image\\/(?:png|jpeg|webp);base64,/).max(5600000)).max(2).optional(),
+}).superRefine((message, context) => {
+  if (!message.content && !(message.images?.length)) {
+    context.addIssue({ code: "custom", message: "Schreibe eine Nachricht oder füge ein Bild hinzu." });
+  }
 });
 const requestSchema = z.object({
   messages: z.array(messageSchema).min(1).max(12),
@@ -61,6 +66,9 @@ const requestSchema = z.object({
   value.messages.forEach((message, index) => {
     if (message.role === "user" && message.content.length > 5000) {
       context.addIssue({ code: "custom", path: ["messages", index, "content"], message: "Eine eigene Nachricht darf höchstens 5.000 Zeichen lang sein." });
+    }
+    if (message.role === "assistant" && message.images?.length) {
+      context.addIssue({ code: "custom", path: ["messages", index, "images"], message: "Bilder können nur in eigenen Nachrichten gesendet werden." });
     }
   });
   if (value.messages[value.messages.length - 1]?.role !== "user") {
@@ -74,6 +82,7 @@ const roleInstructions: Record<string, string[]> = {
     "Antworte altersgerecht, verständlich und freundlich. Erkläre schwierige Dinge in kleinen Schritten, mit Beispielen.",
     "WICHTIGE LERNREGEL: Bei einer konkreten Rechen-, Haus- oder Übungsaufgabe darfst du NICHT sofort das Endergebnis, eine vollständige Musterlösung oder alle ausgefüllten Antworten verraten. Fordere zuerst einen eigenen Versuch an: Frage zum Beispiel „Was hast du bisher gerechnet?“ oder bitte um den ersten Rechenschritt. Gib höchstens einen kleinen, hilfreichen Hinweis und stelle genau eine passende Rückfrage. Wenn die Person sagt, sie weiß nicht weiter, zerlege nur den ALLERERSTEN Schritt und lass sie diesen selbst ausführen. Auch bei „Gib mir einfach die Lösung“ sollst du zunächst beim eigenen Versuch helfen. Sobald die Person einen eigenen Versuch oder Rechenschritt geschickt hat, prüfe genau diesen, erkläre freundlich Fehler und gib den nächsten Schritt. Eine vollständige Lösung gibt es erst, nachdem ein eigener Versuch vorliegt und die Person danach weiterhin eine vollständige Erklärung braucht. Bei normalen Wissensfragen ohne Übungscharakter beantworte die Frage weiterhin direkt.",
     "Bei Mathematik schreibe verständlich und sauber: Nutze echte Hochzahlen wie 12⁴ oder korrekt markierte Formeln, erkläre kurz, was eine Potenz bedeutet, und trenne jeden Rechenschritt in eine eigene Zeile. Verwende im Deutschen den Punkt als Tausendertrennzeichen und das Komma als Dezimalzeichen. Gib nie eine bloße Zahlenkette ohne Erklärung aus.",
+    "Du kannst auch hochgeladene Fotos von Arbeitsblättern, Buchseiten und Aufgaben analysieren. Lies den sichtbaren Inhalt sorgfältig, beschreibe unleserliche Stellen ehrlich und rate keine fehlenden Aufgaben ab.",
     "Du kannst auch Dateien als Lernzettel, Zusammenfassung, Karteikarten, Tabellen oder Übungsblätter erstellen. Gib dann eine passende Datei in files zurück.",
     "Schüler dürfen keine Schulverwaltung, Klassen, Stundenpläne, Lehrerzuordnungen oder andere Schul-Datenbankeinträge verändern. Erstelle dafür keine actions.",
     "Bitte niemals um Passwörter, private Kontaktdaten oder vertrauliche Angaben. Erfinde keine Fakten und kennzeichne Unsicherheit."
@@ -183,7 +192,15 @@ export async function POST(request: Request) {
 
     const input: OpenAIInputMessage[] = [
       { role: "developer", content: systemText },
-      ...parsed.data.messages,
+      ...parsed.data.messages.map((message) => ({
+        role: message.role,
+        content: message.images?.length
+          ? [
+              ...(message.content ? [{ type: "input_text" as const, text: message.content }] : []),
+              ...message.images.map((image_url) => ({ type: "input_image" as const, image_url, detail: "auto" as const })),
+            ]
+          : message.content,
+      })),
     ];
     const result = await runOpenAIResponse({ input, maxOutputTokens: 3400, jsonMode: true });
 
