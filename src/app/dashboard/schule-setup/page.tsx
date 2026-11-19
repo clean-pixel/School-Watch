@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createClassSubject } from "@/app/dashboard/actions";
 import { SchoolResearchPanel } from "./school-research-panel";
+import { SchoolStartWizard } from "./school-start-wizard";
 
 export default async function SchoolSetupPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const { status } = await searchParams;
