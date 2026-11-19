@@ -524,6 +524,10 @@ export function LearningTutor({ userRole }: { userRole: string }) {
                 onClick={() => { setInput(suggestion.text); composerRef.current?.focus(); }}>
                 <span>{suggestion.label}</span><span aria-hidden="true">↗</span>
               </button>)}
+              {userRole === "school_admin" && <button type="button" onClick={() => {
+                setInput("Ich möchte die Klassen meiner Schule einrichten. Führe mich bitte Schritt für Schritt: Frage zuerst nach den Jahrgangsstufen, danach nach der Zahl der Parallelklassen und den Buchstaben (zum Beispiel A, B, C und D). Zeige mir anschließend eine Vorschau und warte auf meine Bestätigung.");
+                composerRef.current?.focus();
+              }}><span>Klassen mit KI einrichten</span><span aria-hidden="true">↗</span></button>}
             </div>
           </div>
         ) : activeChat.messages.map((message, index) => (
