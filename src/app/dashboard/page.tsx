@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { LearningTutor } from "./lernen/learning-tutor";
 
 const roleNames: Record<string, string> = {
   platform_admin: "Plattformadministration",
@@ -53,11 +54,6 @@ export default async function Dashboard() {
   const { count: classCount } = profile.school_id
     ? await supabase.from("classes").select("id", { count: "exact", head: true }).eq("school_id", profile.school_id)
     : { count: null };
-
-  // A newly created school with no classes starts in the guided AI setup immediately.
-  if (schoolAdmin && profile.school_id && (classCount ?? 0) === 0) {
-    redirect("/dashboard/schule-setup?start=1");
-  }
 
   const { count: teacherCount } = schoolAdmin && profile.school_id
     ? await supabase.from("teachers").select("id", { count: "exact", head: true }).eq("school_id", profile.school_id)
@@ -150,9 +146,14 @@ export default async function Dashboard() {
         <h1 style={{ fontSize: "2.6rem" }}>Willkommen{profile.display_name ? `, ${profile.display_name}` : ""}</h1>
         {schoolAdmin && profile.school_id && (classCount ?? 0) === 0 && <article className="card" style={{ margin: "20px 0", borderColor: "var(--border-strong)" }}>
           <div className="eyebrow">Dein erster Schulstart</div>
-          <h2 style={{ fontSize: "1.55rem" }}>Lass uns deine Schule gemeinsam einrichten.</h2>
-          <p>Der SchulWatch-Assistent fragt dich nach Jahrgangsstufen, Parallelklassen und Buchstaben wie A, B, C und D. Danach führt er dich durch Fächer, Lehrkräfte und Stundenpläne.</p>
-          <Link className="button" href="/dashboard/schule-setup">KI-Schulstart jetzt beginnen →</Link>
+          <h2 style={{ fontSize: "1.55rem" }}>Die KI richtet deine Schule mit dir ein.</h2>
+          <p>Sie fragt dich nach Klassenstufen, Parallelklassen, Fächern und Schulzeiten. Bestätigte Angaben werden direkt in deiner Schulverwaltung angelegt.</p>
+          <LearningTutor
+            userRole="school_admin"
+            initialTitle="Schule mit KI einrichten"
+            initialPrompt="Ich möchte meine neu erstellte Schule vollständig einrichten. Führe mich bitte Schritt für Schritt durch die Einrichtung und stelle mir zuerst die wichtigste Frage."
+            onboardingMode
+          />
         </article>}
         {school && <article className="card"><div className="eyebrow">Deine Schule</div><h2 style={{ fontSize: "1.7rem" }}>{school.name}</h2><p>{school.school_type} · {school.city}</p><p>Schul-ID: <code>{school.id}</code></p>{schoolAdmin && <p>Du bist als Schulleitung angemeldet und kannst hier Klassen, Stundenpläne und Schulbereiche verwalten.</p>}</article>}
         {!profile.school_id && <div className="notice">Dein Konto ist noch keiner Schule zugeordnet.</div>}
