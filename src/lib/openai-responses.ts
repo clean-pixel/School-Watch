@@ -2,7 +2,10 @@ export type AiCitation = { title: string; url: string };
 
 export type OpenAIInputMessage = {
   role: "developer" | "system" | "user" | "assistant";
-  content: string;
+  content: string | Array<
+    | { type: "input_text"; text: string }
+    | { type: "input_image"; image_url: string; detail?: "auto" | "low" | "high" }
+  >;
 };
 
 type RunOptions = {

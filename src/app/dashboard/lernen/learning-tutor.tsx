@@ -11,12 +11,19 @@ type ProposedAction =
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  images?: string[];
   files?: GeneratedFile[];
   actions?: ProposedAction[];
   actionResult?: string;
   actionsApplied?: boolean;
 };
 type ChatSession = { id: string; title: string; messages: ChatMessage[] };
+type SpeechRecognitionLike = {
+  lang: string; interimResults: boolean;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: (() => void) | null; onend: (() => void) | null;
+  start: () => void; stop: () => void;
+};
 
 const suggestions = [
   { label: "Etwas verständlich erklären", text: "Erkläre mir bitte verständlich: " },
@@ -230,7 +237,12 @@ export function LearningTutor({ userRole }: { userRole: string }) {
   const [busy, setBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [error, setError] = useState("");
+  const [attachments, setAttachments] = useState<Array<{ name: string; dataUrl: string }>>([]);
+  const [listening, setListening] = useState(false);
+  const [speakingMessage, setSpeakingMessage] = useState<number | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const activeChat = useMemo(() => chats.find((chat) => chat.id === activeChatId) ?? chats[0], [chats, activeChatId]);
   const isStudent = userRole === "student";
   const canApplyActions = userRole === "teacher" || userRole === "school_admin";
@@ -248,13 +260,17 @@ export function LearningTutor({ userRole }: { userRole: string }) {
   async function send(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const content = input.trim();
-    if (!content || busy || !activeChat) return;
+    if ((!content && attachments.length === 0) || busy || !activeChat) return;
     const chatId = activeChat.id;
-    const conversation: ChatMessage[] = [...activeChat.messages, { role: "user", content }];
+    const images = attachments.map((item) => item.dataUrl);
+    const messageContent = content || "Bitte analysiere das hochgeladene Bild und erkläre mir, was darauf zu sehen ist.";
+    const conversation: ChatMessage[] = [...activeChat.messages, { role: "user", content: messageContent, ...(images.length ? { images } : {}) }];
     setChats((current) => current.map((chat) => chat.id === chatId
       ? { ...chat, title: chat.messages.length === 0 ? titleFromMessage(content) : chat.title, messages: conversation }
       : chat));
     setInput("");
+    setAttachments([]);
+    if (imageInputRef.current) imageInputRef.current.value = "";
     setError("");
     setBusy(true);
 
@@ -262,7 +278,7 @@ export function LearningTutor({ userRole }: { userRole: string }) {
       const response = await fetch("/api/learning/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: conversation.slice(-12).map(({ role, content: messageContent }) => ({ role, content: messageContent })) }),
+        body: JSON.stringify({ messages: (() => { const recent = conversation.slice(-12); const latestImageIndex = recent.reduce((last, message, index) => message.images?.length ? index : last, -1); return recent.map((message, index) => ({ role: message.role, content: message.content, ...(index === latestImageIndex && message.images?.length ? { images: message.images } : {}) })); })() }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Die KI konnte nicht antworten.");
@@ -280,11 +296,83 @@ export function LearningTutor({ userRole }: { userRole: string }) {
     } catch (err) {
       setChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, messages: activeChat.messages } : chat));
       setInput(content);
+      setAttachments(images.map((dataUrl, index) => ({ name: "Bild " + (index + 1), dataUrl })));
       setError(err instanceof Error ? err.message : "Verbindung zur SchulWatch KI fehlgeschlagen.");
     } finally {
       setBusy(false);
       composerRef.current?.focus();
     }
+  }
+
+  async function addImages(files: FileList | null) {
+    if (!files?.length) return;
+    setError("");
+    const selected = Array.from(files).slice(0, 2 - attachments.length);
+    if (!selected.length) { setError("Du kannst pro Nachricht höchstens zwei Bilder anhängen."); return; }
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    const next = [...attachments];
+    for (const file of selected) {
+      if (!allowed.includes(file.type)) { setError("Bitte lade nur JPG-, PNG- oder WEBP-Bilder hoch."); continue; }
+      if (file.size > 12 * 1024 * 1024) { setError("Das Originalbild darf höchstens 12 MB groß sein."); continue; }
+      const dataUrl = await createImageBitmap(file).then(async (bitmap) => {
+        const scale = Math.min(1, 1600 / bitmap.width, 1600 / bitmap.height);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Bild konnte nicht verarbeitet werden.");
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Bild konnte nicht komprimiert werden.")), "image/jpeg", 0.72);
+        });
+        if (blob.size > 1500000) throw new Error("Das Bild ist nach der Komprimierung noch zu groß. Bitte wähle ein kleineres Bild.");
+        return await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Bild konnte nicht gelesen werden."));
+          reader.onerror = () => reject(new Error("Bild konnte nicht gelesen werden."));
+          reader.readAsDataURL(blob);
+        });
+      }).catch((cause) => {
+        setError(cause instanceof Error ? cause.message : "Bild konnte nicht verarbeitet werden.");
+        return "";
+      });
+      if (dataUrl) next.push({ name: file.name, dataUrl });
+    }
+    setAttachments(next);
+  }
+
+  function startVoiceInput() {
+    const speechWindow = window as unknown as {
+      SpeechRecognition?: new () => SpeechRecognitionLike;
+      webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+    };
+    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+    if (!Recognition) { setError("Spracheingabe wird von diesem Browser nicht unterstützt. Nutze bitte Chrome oder Edge."); return; }
+    const recognition = new Recognition();
+    recognition.lang = "de-DE";
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results).map((result) => result[0]?.transcript ?? "").join(" ").trim();
+      if (transcript) setInput((current) => current ? current + " " + transcript : transcript);
+    };
+    recognition.onerror = () => { setError("Die Spracheingabe hat nicht funktioniert. Prüfe die Mikrofonberechtigung."); setListening(false); };
+    recognition.onend = () => setListening(false);
+    recognitionRef.current = recognition;
+    setListening(true);
+    recognition.start();
+  }
+
+  function speakAnswer(content: string, index: number) {
+    if (!("speechSynthesis" in window)) { setError("Sprachausgabe wird von diesem Browser nicht unterstützt."); return; }
+    if (speakingMessage === index) { window.speechSynthesis.cancel(); setSpeakingMessage(null); return; }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(content.replace(/[*#`]/g, " "));
+    utterance.lang = "de-DE";
+    utterance.onend = () => setSpeakingMessage(null);
+    utterance.onerror = () => setSpeakingMessage(null);
+    setSpeakingMessage(index);
+    window.speechSynthesis.speak(utterance);
   }
 
   async function applyActions(chatId: string, messageIndex: number, actions: ProposedAction[]) {
@@ -312,6 +400,19 @@ export function LearningTutor({ userRole }: { userRole: string }) {
   }
 
   return <section className="teacher-ai-shell" aria-label="Chat mit SchulWatch KI">
+    <style jsx global>{`
+      .teacher-ai-image-attachments,.teacher-ai-pending-images{display:flex;flex-wrap:wrap;gap:9px;margin-top:10px}
+      .teacher-ai-image-attachments img,.teacher-ai-pending-image img{width:150px;height:112px;object-fit:cover;border-radius:12px;border:1px solid var(--border)}
+      .teacher-ai-pending-image{position:relative}
+      .teacher-ai-pending-image button{position:absolute;right:5px;top:5px;border:0;border-radius:50%;width:25px;height:25px;background:#111;color:white;cursor:pointer}
+      .teacher-ai-extra-tools{display:flex;gap:7px;flex-wrap:wrap}
+      .teacher-ai-tool,.teacher-ai-speak{border:1px solid var(--border);background:transparent;color:var(--white);border-radius:10px;padding:8px 11px;cursor:pointer;font:inherit;font-size:.85rem}
+      .teacher-ai-tool.active{border-color:var(--purple);color:var(--purple)}
+      .teacher-ai-tool:disabled{opacity:.5;cursor:not-allowed}
+      .teacher-ai-speak{margin-top:9px}
+      .teacher-ai-next-step a{color:var(--purple);font-weight:700;text-decoration:none}
+      @media(max-width:600px){.teacher-ai-enter-hint{display:none}.teacher-ai-composer-tools{gap:8px;flex-wrap:wrap}}
+    `}</style>
     <aside className="teacher-ai-sidebar">
       <div className="teacher-ai-brand">
         <span className="teacher-ai-brand-mark">S</span>
@@ -367,6 +468,14 @@ export function LearningTutor({ userRole }: { userRole: string }) {
             <div className="teacher-ai-message-body">
               {message.role === "user" && <small>Du</small>}
               <div className="teacher-ai-message-content">{renderChatContent(message.content)}</div>
+              {message.images && message.images.length > 0 && <div className="teacher-ai-image-attachments">
+                {message.images.map((image, imageIndex) => <a href={image} target="_blank" rel="noreferrer" key={imageIndex}>
+                  <img src={image} alt={"Hochgeladenes Bild " + (imageIndex + 1)} />
+                </a>)}
+              </div>}
+              {message.role === "assistant" && <button type="button" className="teacher-ai-speak" onClick={() => speakAnswer(message.content, index)}>
+                {speakingMessage === index ? "■ Vorlesen stoppen" : "🔊 Antwort vorlesen"}
+              </button>}
               {message.files && message.files.length > 0 && <div className="ai-generated-files">
                 <strong>Erstellte Dateien</strong>
                 {message.files.map((file, fileIndex) => (
@@ -387,6 +496,9 @@ export function LearningTutor({ userRole }: { userRole: string }) {
                 {!canApplyActions && <small>Diese Änderungen können nur von der Schulleitung oder einer berechtigten Lehrkraft übernommen werden.</small>}
               </div>}
               {message.actionResult && <div className="notice" role="status">{message.actionResult}</div>}
+              {message.actionResult && userRole === "school_admin" && message.actions?.some((action) => action.type === "create_class") && <p className="teacher-ai-next-step">
+                <a href="/dashboard/schule-setup">Weiter mit Fächern, Lehrkräften und Schulstundenplan →</a>
+              </p>}
             </div>
           </article>
         ))}
@@ -399,7 +511,15 @@ export function LearningTutor({ userRole }: { userRole: string }) {
 
       {error && <div className="notice teacher-ai-notice" role="alert">{error}</div>}
       <div className="teacher-ai-composer-wrap">
+        {attachments.length > 0 && <div className="teacher-ai-pending-images">
+          {attachments.map((image, index) => <div className="teacher-ai-pending-image" key={index}>
+            <img src={image.dataUrl} alt={image.name} />
+            <button type="button" aria-label="Bild entfernen" onClick={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))}>×</button>
+          </div>)}
+        </div>}
         <form className="teacher-ai-composer" onSubmit={send}>
+          <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden
+            onChange={(event) => { void addImages(event.target.files); event.currentTarget.value = ""; }} />
           <textarea ref={composerRef} value={input} onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
@@ -410,8 +530,15 @@ export function LearningTutor({ userRole }: { userRole: string }) {
             rows={1} maxLength={5000} placeholder="Schreibe eine Nachricht …"
             aria-label="Deine Nachricht an SchulWatch KI" disabled={busy || actionBusy} />
           <div className="teacher-ai-composer-tools">
+            <div className="teacher-ai-extra-tools">
+              <button type="button" className="teacher-ai-tool" onClick={() => imageInputRef.current?.click()} disabled={busy || actionBusy || attachments.length >= 2}>＋ Bild</button>
+              <button type="button" className={"teacher-ai-tool" + (listening ? " active" : "")}
+                onClick={() => listening ? recognitionRef.current?.stop() : startVoiceInput()} disabled={busy || actionBusy}>
+                {listening ? "■ Aufnahme stoppen" : "🎙 Sprechen"}
+              </button>
+            </div>
             <span className="teacher-ai-enter-hint">Enter zum Senden · Shift + Enter für neue Zeile</span>
-            <button className="teacher-ai-send" type="submit" aria-label="Nachricht senden" disabled={busy || actionBusy || !input.trim()}>{busy ? "…" : "↑"}</button>
+            <button className="teacher-ai-send" type="submit" aria-label="Nachricht senden" disabled={busy || actionBusy || (!input.trim() && attachments.length === 0)}>{busy ? "…" : "↑"}</button>
           </div>
         </form>
         <p className="teacher-ai-footnote">{isStudent
