@@ -6,6 +6,7 @@ import Link from "next/link";
 const suffixOptions = ["A", "B", "C", "D", "E", "F"];
 
 export function SchoolStartWizard({ schoolName }: { schoolName: string }) {
+  const [step, setStep] = useState(1);
   const [startGrade, setStartGrade] = useState("5");
   const [endGrade, setEndGrade] = useState("10");
   const [parallelClasses, setParallelClasses] = useState("3");
@@ -95,46 +96,69 @@ export function SchoolStartWizard({ schoolName }: { schoolName: string }) {
         <h2>Wir richten {schoolName} gemeinsam ein.</h2>
         <p className="school-start-hint">Ich stelle dir ein paar einfache Fragen und bereite deine Klassen vor. Gespeichert wird erst, wenn du den Vorschlag bestätigst.</p>
       </div>
-      <span className="school-start-step">{done ? "Einrichtung gestartet" : "Schritt 1 von 3"}</span>
+      <span className="school-start-step">{done ? "Tutorial" : "Schritt " + step + " von 3"}</span>
     </div>
 
     {!done ? <>
-      <div className="school-start-question">KI: Mit welchen Jahrgangsstufen arbeitet deine Schule?</div>
-      <div className="school-start-fields">
-        <label className="field">Erster Jahrgang
-          <select value={startGrade} onChange={(event) => setStartGrade(event.target.value)}>
-            {Array.from({ length: 13 }, (_, index) => String(index + 1)).map((grade) => <option key={grade} value={grade}>{grade}. Klasse</option>)}
-          </select>
-        </label>
-        <label className="field">Letzter Jahrgang
-          <select value={endGrade} onChange={(event) => setEndGrade(event.target.value)}>
-            {Array.from({ length: 13 }, (_, index) => String(index + 1)).filter((grade) => Number(grade) >= Number(startGrade)).map((grade) => <option key={grade} value={grade}>{grade}. Klasse</option>)}
-          </select>
-        </label>
-        <label className="field">Parallelklassen pro Jahrgang
-          <select value={parallelClasses} onChange={(event) => { setParallelClasses(event.target.value); setSuffixes(suffixOptions.slice(0, Number(event.target.value))); }}>
+      {step === 1 && <>
+        <div className="school-start-question">KI: Welche Jahrgangsstufen gibt es an deiner Schule?</div>
+        <p className="school-start-hint">Zum Beispiel von Klasse 5 bis Klasse 10.</p>
+        <div className="school-start-fields" style={{ gridTemplateColumns: "repeat(2,minmax(0,1fr))" }}>
+          <label className="field">Erster Jahrgang
+            <select value={startGrade} onChange={(event) => {
+              setStartGrade(event.target.value);
+              if (Number(endGrade) < Number(event.target.value)) setEndGrade(event.target.value);
+            }}>
+              {Array.from({ length: 13 }, (_, index) => String(index + 1)).map((grade) => <option key={grade} value={grade}>{grade}. Klasse</option>)}
+            </select>
+          </label>
+          <label className="field">Letzter Jahrgang
+            <select value={endGrade} onChange={(event) => setEndGrade(event.target.value)}>
+              {Array.from({ length: 13 }, (_, index) => String(index + 1)).filter((grade) => Number(grade) >= Number(startGrade)).map((grade) => <option key={grade} value={grade}>{grade}. Klasse</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="school-start-actions">
+          <button type="button" className="button" onClick={() => setStep(2)}>Weiter <span aria-hidden="true">→</span></button>
+        </div>
+      </>}
+      {step === 2 && <>
+        <div className="school-start-question">KI: Wie viele Klassen gibt es pro Jahrgang?</div>
+        <p className="school-start-hint">Wenn es in der 5. Klasse eine 5A, 5B und 5C gibt, wählst du drei Parallelklassen.</p>
+        <label className="field">Anzahl der Parallelklassen
+          <select value={parallelClasses} onChange={(event) => {
+            setParallelClasses(event.target.value);
+            setSuffixes(suffixOptions.slice(0, Number(event.target.value)));
+          }}>
             {[1,2,3,4,5,6].map((count) => <option key={count} value={count}>{count} {count === 1 ? "Klasse" : "Klassen"}</option>)}
           </select>
         </label>
-      </div>
-      <div className="school-start-question">KI: Welche Buchstaben sollen die Klassen bekommen?</div>
-      <p className="school-start-hint">Zum Beispiel A, B, C und D. Du kannst die Auswahl anpassen.</p>
-      <div className="school-start-letters">
-        {suffixOptions.map((letter) => <button type="button" key={letter} aria-pressed={suffixes.includes(letter)} onClick={() => toggleSuffix(letter)}>{letter}</button>)}
-      </div>
-      <div className="school-start-question">Deine Vorschau</div>
-      <p className="school-start-hint">{proposed.length} Klassen werden vorbereitet.</p>
-      <div className="school-start-preview">
-        {proposed.slice(0, 24).map((item) => <span key={item.name}>{item.name}</span>)}
-        {proposed.length > 24 && <span>+ weitere</span>}
-      </div>
-      {error && <div className="notice" role="alert">{error}</div>}
-      <div className="school-start-actions">
-        <button type="button" className="button" onClick={createClasses} disabled={busy || !proposed.length || proposed.length > 20}>
-          {busy ? "Klassen werden vorbereitet …" : "✓ Klassen erstellen"}
-        </button>
-        <span className="school-start-hint">Maximal 20 auf einmal · du kannst später weitere ergänzen</span>
-      </div>
+        <div className="school-start-question">KI: Welche Buchstaben sollen verwendet werden?</div>
+        <p className="school-start-hint">Zum Beispiel A, B, C und D. Wähle die gewünschten Buchstaben aus.</p>
+        <div className="school-start-letters">
+          {suffixOptions.map((letter) => <button type="button" key={letter} aria-pressed={suffixes.includes(letter)} onClick={() => toggleSuffix(letter)}>{letter}</button>)}
+        </div>
+        <div className="school-start-actions">
+          <button type="button" className="button secondary" onClick={() => setStep(1)}>← Zurück</button>
+          <button type="button" className="button" onClick={() => setStep(3)} disabled={!suffixes.length}>Vorschau ansehen →</button>
+        </div>
+      </>}
+      {step === 3 && <>
+        <div className="school-start-question">KI: So würde ich deine Klassen anlegen. Passt das?</div>
+        <p className="school-start-hint">{proposed.length} Klassen werden vorbereitet. Du kannst vor dem Speichern noch einmal alles prüfen.</p>
+        <div className="school-start-preview">
+          {proposed.slice(0, 24).map((item) => <span key={item.name}>{item.name}</span>)}
+          {proposed.length > 24 && <span>+ weitere</span>}
+        </div>
+        {proposed.length > 20 && <div className="notice" role="alert">Das sind mehr als 20 Klassen. Gehe zurück und teile die Einrichtung in zwei Durchgänge auf.</div>}
+        {error && <div className="notice" role="alert">{error}</div>}
+        <div className="school-start-actions">
+          <button type="button" className="button secondary" onClick={() => setStep(2)}>← Ändern</button>
+          <button type="button" className="button" onClick={createClasses} disabled={busy || !proposed.length || proposed.length > 20}>
+            {busy ? "Klassen werden vorbereitet …" : "✓ Klassen jetzt erstellen"}
+          </button>
+        </div>
+      </>}
     </> : <div className="school-start-tutorial">
       <div className="eyebrow">KI-Tutorial · Nächste Schritte</div>
       <h3>Super! Deine Klassen sind vorbereitet.</h3>
