@@ -43,8 +43,8 @@ export async function POST(request: Request) {
     if (!(audio instanceof File) || audio.size === 0) {
       return NextResponse.json({ error: "Es wurde keine Sprachaufnahme gefunden." }, { status: 400 });
     }
-    if (audio.size > 12 * 1024 * 1024) {
-      return NextResponse.json({ error: "Die Aufnahme ist zu groß. Bitte sprich höchstens 60 Sekunden." }, { status: 413 });
+    if (audio.size > 6 * 1024 * 1024) {
+      return NextResponse.json({ error: "Die Aufnahme ist zu groß. Bitte sprich höchstens 30 Sekunden." }, { status: 413 });
     }
     const mimeType = audio.type.toLowerCase().split(";")[0].trim();
     if (!allowedAudioTypes.has(mimeType)) {
