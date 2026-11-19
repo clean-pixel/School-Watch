@@ -40,7 +40,7 @@ const actionSchema = z.discriminatedUnion("type", [
   assignTeacherAction,
   timetableAction,
 ]);
-const requestSchema = z.object({ actions: z.array(actionSchema).min(1).max(20) });
+const requestSchema = z.object({ actions: z.array(actionSchema).min(1).max(60) });
 
 type Entry = z.infer<typeof timetableEntry>;
 
