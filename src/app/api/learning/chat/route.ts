@@ -49,7 +49,7 @@ const fileSchema = z.object({
 const outputSchema = z.object({
   answer: z.string().trim().min(1).max(18000),
   files: z.array(fileSchema).max(4).default([]),
-  actions: z.array(actionSchema).max(20).default([]),
+  actions: z.array(actionSchema).max(60).default([]),
 });
 const imagePathSchema = z.string().trim().min(1).max(220)
   .regex(/^[0-9a-f-]{36}\/[A-Za-z0-9._-]+$/i, "Ungültiger Bildpfad.");
