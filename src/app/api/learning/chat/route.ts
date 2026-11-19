@@ -54,7 +54,7 @@ const outputSchema = z.object({
 const messageSchema = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.string().trim().max(20000),
-  images: z.array(z.string().refine((value) => value.startsWith("data:image/png;base64,") || value.startsWith("data:image/jpeg;base64,") || value.startsWith("data:image/webp;base64,")).max(5600000)).max(2).optional(),
+  images: z.array(z.string().refine((value) => value.startsWith("data:image/png;base64,") || value.startsWith("data:image/jpeg;base64,") || value.startsWith("data:image/webp;base64,")).max(2100000)).max(2).optional(),
 }).superRefine((message, context) => {
   if (!message.content && !(message.images?.length)) {
     context.addIssue({ code: "custom", message: "Schreibe eine Nachricht oder füge ein Bild hinzu." });
