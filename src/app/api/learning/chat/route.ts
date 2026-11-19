@@ -145,7 +145,7 @@ export async function POST(request: Request) {
     let schoolContext = "Kein Schulprofil mit dieser Sitzung verbunden.";
     if (profile.school_id) {
       const [schoolResult, classesResult, subjectsResult, assignmentsResult, teachersResult] = await Promise.all([
-        supabase.from("schools").select("name,city,state,day_start_time,day_end_time").eq("id", profile.school_id).maybeSingle(),
+        supabase.from("schools").select("name,school_type,city,state,day_start_time,day_end_time").eq("id", profile.school_id).maybeSingle(),
         supabase.from("classes").select("id,name,grade").eq("school_id", profile.school_id).order("name").limit(100),
         supabase.from("class_subjects").select("class_id,subject,weekly_periods_a,weekly_periods_b").eq("school_id", profile.school_id).limit(500),
         (() => {
