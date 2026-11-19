@@ -53,6 +53,12 @@ export default async function Dashboard() {
   const { count: classCount } = profile.school_id
     ? await supabase.from("classes").select("id", { count: "exact", head: true }).eq("school_id", profile.school_id)
     : { count: null };
+
+  // A newly created school with no classes starts in the guided AI setup immediately.
+  if (schoolAdmin && profile.school_id && (classCount ?? 0) === 0) {
+    redirect("/dashboard/schule-setup?start=1");
+  }
+
   const { count: teacherCount } = schoolAdmin && profile.school_id
     ? await supabase.from("teachers").select("id", { count: "exact", head: true }).eq("school_id", profile.school_id)
     : { count: null };
