@@ -32,6 +32,7 @@ export function ClassSetupWizard({ existingClasses }: { existingClasses: Existin
   );
   const alreadyThere = planned.filter((item) => existingNames.has(item.name.toLocaleLowerCase("de-DE")));
   const newClasses = planned.filter((item) => !existingNames.has(item.name.toLocaleLowerCase("de-DE")));
+  const tooManyClasses = planned.length > 60;
   const subjects = useMemo(
     () => [...new Set(subjectsText.split(/[,;\n]/).map((item) => item.trim()).filter(Boolean))].slice(0, 25),
     [subjectsText],
@@ -44,7 +45,7 @@ export function ClassSetupWizard({ existingClasses }: { existingClasses: Existin
   }
 
   async function createClasses() {
-    if (!planned.length || busy) return;
+    if (!planned.length || planned.length > 60 || busy) return;
     setBusy(true);
     setError("");
     try {
@@ -125,9 +126,10 @@ export function ClassSetupWizard({ existingClasses }: { existingClasses: Existin
                 placeholder="Mathematik, Deutsch, Englisch" maxLength={600} />
             </label>
             {suffixes.length === 0 && <p className="class-setup-error">Wähle mindestens einen Klassenbuchstaben aus.</p>}
+            {tooManyClasses && <p className="class-setup-error">Für einen Einrichtungsschritt sind höchstens 60 Klassen möglich. Wähle weniger Jahrgänge oder Buchstaben.</p>}
             <div className="class-setup-actions">
               <button className="button secondary" type="button" onClick={() => setStep(0)}>← Zurück</button>
-              <button className="button" type="button" disabled={!suffixes.length} onClick={() => setStep(2)}>Vorschau anzeigen →</button>
+              <button className="button" type="button" disabled={!suffixes.length || tooManyClasses} onClick={() => setStep(2)}>Vorschau anzeigen →</button>
             </div>
           </div>}
 
