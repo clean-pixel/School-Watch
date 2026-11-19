@@ -278,7 +278,7 @@ export function LearningTutor({ userRole }: { userRole: string }) {
       const response = await fetch("/api/learning/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: conversation.slice(-12).map(({ role, content: messageContent, images: messageImages }) => ({ role, content: messageContent, ...(messageImages?.length ? { images: messageImages } : {}) })) }),
+        body: JSON.stringify({ messages: conversation.slice(-12).map((message, index, list) => ({ role: message.role, content: message.content, ...(index === list.length - 1 && message.images?.length ? { images: message.images } : {}) })) }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Die KI konnte nicht antworten.");
@@ -313,13 +313,30 @@ export function LearningTutor({ userRole }: { userRole: string }) {
     const next = [...attachments];
     for (const file of selected) {
       if (!allowed.includes(file.type)) { setError("Bitte lade nur JPG-, PNG- oder WEBP-Bilder hoch."); continue; }
-      if (file.size > 4 * 1024 * 1024) { setError("Jedes Bild darf höchstens 4 MB groß sein."); continue; }
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Bild konnte nicht gelesen werden."));
-        reader.onerror = () => reject(new Error("Bild konnte nicht gelesen werden."));
-        reader.readAsDataURL(file);
-      }).catch(() => "");
+      if (file.size > 12 * 1024 * 1024) { setError("Das Originalbild darf höchstens 12 MB groß sein."); continue; }
+      const dataUrl = await createImageBitmap(file).then(async (bitmap) => {
+        const scale = Math.min(1, 1600 / bitmap.width, 1600 / bitmap.height);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Bild konnte nicht verarbeitet werden.");
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Bild konnte nicht komprimiert werden.")), "image/jpeg", 0.72);
+        });
+        if (blob.size > 1500000) throw new Error("Das Bild ist nach der Komprimierung noch zu groß. Bitte wähle ein kleineres Bild.");
+        return await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Bild konnte nicht gelesen werden."));
+          reader.onerror = () => reject(new Error("Bild konnte nicht gelesen werden."));
+          reader.readAsDataURL(blob);
+        });
+      }).catch((cause) => {
+        setError(cause instanceof Error ? cause.message : "Bild konnte nicht verarbeitet werden.");
+        return "";
+      });
       if (dataUrl) next.push({ name: file.name, dataUrl });
     }
     setAttachments(next);
