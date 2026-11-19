@@ -586,7 +586,7 @@ export function LearningTutor({
                 {!canApplyActions && <small>Diese Änderungen können nur von der Schulleitung oder einer berechtigten Lehrkraft übernommen werden.</small>}
               </div>}
               {message.actionResult && <div className="notice" role="status">{message.actionResult}</div>}
-              {message.actionResult && userRole === "school_admin" && message.actions?.some((action) => action.type === "create_class") && <p className="teacher-ai-next-step">
+              {message.actionResult && userRole === "school_admin" && !onboardingMode && message.actions?.some((action) => action.type === "create_class") && <p className="teacher-ai-next-step">
                 <a href="/dashboard/schule-setup">Weiter mit Fächern, Lehrkräften und Schulstundenplan →</a>
               </p>}
             </div>
