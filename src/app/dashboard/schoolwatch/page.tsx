@@ -174,7 +174,11 @@ export default async function SchoolWatchPage() {
       }>).map((item) => ({
         id: item.id, subject: item.subject, description: item.description, dueAt: item.due_at,
       }));
-      changes = ((changesResult.data ?? []) as ChangeItem[]);
+      changes = ((changesResult.data ?? []) as Array<{
+        id: string; subject: string | null; room: string | null; note: string | null; occurs_on: string;
+      }>).map((item) => ({
+        id: item.id, subject: item.subject, room: item.room, note: item.note, occursOn: item.occurs_on,
+      }));
     }
   }
 
