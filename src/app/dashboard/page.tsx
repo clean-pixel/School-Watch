@@ -137,7 +137,7 @@ export default async function Dashboard() {
   return <main className="container">
     <header className="topbar">
       <Link className="brand" href="/dashboard"><span className="brand-mark">S</span> SchulWatch One</Link>
-      <nav className="navlinks"><span>{user.email}</span><form action="/auth/signout" method="post"><button className="button secondary">Abmelden</button></form></nav>
+      <nav className="navlinks"><span>{user.email}</span><Link className="button" href="/dashboard/schoolwatch">SchoolWatch-Uhr testen</Link><form action="/auth/signout" method="post"><button className="button secondary">Abmelden</button></form></nav>
     </header>
     <div className="dash">
       <aside className="sidebar"><strong>{roleNames[profile.role] ?? "Konto"}</strong>{linkGroups.map((group) => <div className="sidebar-group" key={group.title}><span className="sidebar-group-title">{group.title}</span>{group.items.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}</div>)}</aside>
